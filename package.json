@@ -1,0 +1,26 @@
+{
+  "name": "ratonobot",
+  "version": "1.0.0",
+  "description": "Es solo un simple bot, antes no pude hacerlo, pero ahora vere que si.,",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kzadorAT/ratonobot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kzadorAT/ratonobot/issues"
+  },
+  "homepage": "https://github.com/kzadorAT/ratonobot#readme",
+  "dependencies": {
+    "@lmstudio/sdk": "^0.0.12",
+    "axios": "^1.7.2",
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  }
+}

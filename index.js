@@ -25,6 +25,7 @@ async function loadModel() {
     try {
         const lmClient = new LMStudioClient();
         model = await lmClient.llm.load('QuantFactory/Meta-Llama-3-8B-Instruct-GGUF'); // Cambiar el modelo aqui
+        console.log('Modelo cargado exitosamente');
     } catch (error) {
         console.error('Error al cargar el modelo:', error);
     }
@@ -76,6 +77,17 @@ function updateChannelContext(message){
         channelContexts[channelId] = [];
     }
 
+    if(message.reference){
+        const referencedMessage = message.channel.messages.cache.get(message.reference.messageId);
+        if(referencedMessage){
+            // Añadir el mensaje citado al contexto
+            channelContexts[channelId].push({
+                role: referencedMessage.author.id === client.user.id ? 'assistant' : 'user',
+                content: `${referencedMessage.member.displayName}: ${referencedMessage.content}`
+            });
+        }
+    }
+
     // Añadir el nuevo mensaje al contexto
     channelContexts[channelId].push({
         role: 'user',
@@ -124,7 +136,7 @@ async function processQueue() {
 
         // Enviar cada fragmento como un mensaje separado
         for (const [index, part] of replies.entries()) {
-            if(index === 0){
+            if((context.length > 1 || messageQueue.length > 0) && index === 0) {
                 // Enviar el primer fragmento citando el mensaje original si corresponde
                 await message.channel.send({
                     content: part,

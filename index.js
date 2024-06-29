@@ -1,8 +1,15 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const { LMStudioClient } = require('@lmstudio/sdk');
+const axios = require('axios');
 require('dotenv').config();
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
 
 // Nombre del canal de Discord al que se enviará la respuesta
 const targetChannelName = 'testing-bot';
@@ -17,6 +24,7 @@ const maxQueueSize = 4;
 // Historial de mensajes por canal
 const channelContexts = {};
 const contextSize = 5; // Numero de mensajes a mantener en el contexto
+const botEmbeddingLimit = 5; // Numero de mensajes a considerar para la creación del embedding
 
 let model;
 
@@ -48,7 +56,7 @@ client.on('messageCreate', async (message) => {
     if (message.channel.name === targetChannelName) {
         // Si el modelo no se ha cargado, ignorar el mensaje
         if(!model){
-            message.reply('El modelo no está listo todavia. Por favor, inténtalo de nuevo en unos momentos.');
+            message.reply('Loco, no me jodas ahora, esperate un segundo que estoy loading, ja.');
             return;
         }
 
@@ -62,6 +70,10 @@ client.on('messageCreate', async (message) => {
 
         // Actualizar el contexto del canal
         updateChannelContext(message);
+
+        const query = message.content;
+        const searchContext = await gatherSearchContext(message.channel, query);
+        channelContexts[message.channel.id].push(...searchContext);
 
         // Procesar la cola si el bot no está procesando
         if (!isProcessing) {
@@ -100,6 +112,59 @@ function updateChannelContext(message){
     }
 }
 
+async function gatherSearchContext(channel, query){
+    const messages = await channel.messages.fetch({ limit: 100 });
+    const searchContext = [];
+
+    const queryEmbedding = await getEmbedding(query);
+
+    for (const msg of messages.values()) {
+        if(msg.author.id !== client.user.id){
+            const messageEmbedding = await getEmbedding(msg.content);
+            const similarity = cosineSimilarity(queryEmbedding, messageEmbedding);
+            if(similarity > 0.6){
+                console.log(`Mensaje: ${msg.content} - Similaridad: ${similarity} - Autor: ${msg.author.displayName}`);
+                searchContext.push({
+                    role: 'user',
+                    content: `${msg.author.displayName}: ${msg.content}`,
+                    messageId: msg.id
+                });
+
+                const subsequentMessages = await channel.messages.fetch({ after: msg.id, limit: botEmbeddingLimit });
+                for(const subMsg of subsequentMessages.values()){
+                    searchContext.push({
+                        roel: subMsg.author.id === client.user.id ? 'assistant' : 'user',
+                        content: `${subMsg.author.displayName}: ${subMsg.content}`,
+                        messageId: subMsg.id
+                    });
+                }
+            }
+        }
+    }
+    return searchContext;
+}
+
+async function getEmbedding(text) {
+    const response = await axios.post('http://localhost:1234/v1/embeddings', {
+        input: text,
+        model: 'nomic-ai/nomic-embed-text-v1.5-GGUF/nomic-embed-text-v1.5.Q5_K_M.gguf'
+    }, {
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+
+    return response.data.data[0].embedding;
+}
+
+function cosineSimilarity(vecA, vecB){
+    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+    const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+    const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+    return dotProduct / (magnitudeA * magnitudeB);
+}
+
+
 async function processQueue() {
     if (messageQueue.length === 0) {
         return;
@@ -120,9 +185,15 @@ async function processQueue() {
 
         // Generar respuesta usando el modelo con contexto
         const prediction = model.respond([
-            { role: 'system', content: 'Te retiraste de QA para ser programador y tratas de encontrar alguna solución a cualquier cosa que te dicen, tratas de responder siempre con gracia y humor. No usas los nombres de los usuarios seguido de los dos puntos, el usuario que te habla es al que respondes.' },
+            { role: 'system', content: `
+                Te retiraste de QA para ser programador y tratas de encontrar alguna solución a 
+                cualquier cosa que te dicen, tratas de responder siempre con gracia y humor. El nombre del
+                usuario que te manda el mensaje está antes de los dos puntos, pero solo al comienzo, 
+                el usuario que te manda el mensaje es al que respondes. Puedes usar el nombre de otro
+                usuario para responder, pero solo si dices algo referente a ese usuario citado 
+                que haya dicho o contado que hizo, pero referente a lo que te están hablando.` },
             ...context,
-            { role: 'user', content: `${message.member.displayName}: ${message.content}` }
+            { role: 'user', content: `${message.author.displayName}: ${message.content}` }
         ]);
     
         let reply = '';
@@ -161,16 +232,6 @@ async function processQueue() {
             processQueue();
         }
     }
-}
-
-// Función para verificar si hay un mensaje de un usuario diferente en la cola
-function isDifferentUserMessage(currentMessage) {
-    for (const msg of messageQueue) {
-        if (msg.author.id !== currentMessage.author.id) {
-            return true;
-        }
-    }
-    return false;
 }
 
 // Función para manejar el cierre del proceso

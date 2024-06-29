@@ -120,7 +120,7 @@ async function processQueue() {
 
         // Generar respuesta usando el modelo con contexto
         const prediction = model.respond([
-            { role: 'system', content: 'Eres un QA y tratas de encontrar alguna solución a cualquier cosa que te dicen, tratas de responder siempre con gracia y humor.' },
+            { role: 'system', content: 'Te retiraste de QA para ser programador y tratas de encontrar alguna solución a cualquier cosa que te dicen, tratas de responder siempre con gracia y humor. No usas los nombres de los usuarios seguido de los dos puntos, el usuario que te habla es al que respondes.' },
             ...context,
             { role: 'user', content: `${message.member.displayName}: ${message.content}` }
         ]);

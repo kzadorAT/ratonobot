@@ -24,7 +24,7 @@ const maxQueueSize = 4;
 // Historial de mensajes por canal
 const channelContexts = {};
 const contextSize = 5; // Numero de mensajes a mantener en el contexto
-const botEmbeddingLimit = 5; // Numero de mensajes a considerar para la creación del embedding
+const botEmbeddingLimit = 3; // Numero de mensajes a considerar para la creación del embedding
 
 let model;
 
@@ -133,7 +133,7 @@ async function gatherSearchContext(channel, query){
                 const subsequentMessages = await channel.messages.fetch({ after: msg.id, limit: botEmbeddingLimit });
                 for(const subMsg of subsequentMessages.values()){
                     searchContext.push({
-                        roel: subMsg.author.id === client.user.id ? 'assistant' : 'user',
+                        role: subMsg.author.id === client.user.id ? 'assistant' : 'user',
                         content: `${subMsg.author.displayName}: ${subMsg.content}`,
                         messageId: subMsg.id
                     });
@@ -182,6 +182,13 @@ async function processQueue() {
 
         // Obtener el contexto del canal
         const context = channelContexts[message.channel.id] || [];
+
+        // Asegurarse que todos los mensajes en el contexto tengan el campo 'role'
+        context.forEach((msg) => {
+            if (!msg.role) {
+                msg.role = 'user';
+            }
+        });
 
         // Generar respuesta usando el modelo con contexto
         const prediction = model.respond([

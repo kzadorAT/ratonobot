@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
-const { fetchSearchResults } = require('./scrapers/searchScraper');
+const { fetchSearchResults } = require('./scrapers/googleScraper');
 const {
     loadModel,
     getEmbedding,
@@ -99,7 +99,6 @@ client.on('messageCreate', async (message) => {
         }
     }
 });
-
 
 // Función para actualizar el contexto del canal
 function updateChannelContext(message){

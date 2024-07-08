@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const { LMStudioClient } = require('@lmstudio/sdk');
 const axios = require('axios');
+const { fetchSearchResults } = require('./scrapers/searchScraper');
 require('dotenv').config();
 
 const client = new Client({
@@ -24,6 +25,7 @@ const maxQueueSize = 4;
 // Historial de mensajes por canal
 const channelContexts = {};
 const contextSize = 5; // Numero de mensajes a mantener en el contexto
+
 const botEmbeddingLimit = 3; // Numero de mensajes a considerar para la creación del embedding
 
 let model;
@@ -32,7 +34,7 @@ let model;
 async function loadModel() {
     try {
         const lmClient = new LMStudioClient();
-        model = await lmClient.llm.load('QuantFactory/Meta-Llama-3-8B-Instruct-GGUF'); // Cambiar el modelo aqui
+        model = await lmClient.llm.load('QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/Meta-Llama-3-8B-Instruct.Q8_0.gguf'); // Cambiar el modelo aqui
         console.log('Modelo cargado exitosamente');
     } catch (error) {
         console.error('Error al cargar el modelo:', error);
@@ -71,16 +73,39 @@ client.on('messageCreate', async (message) => {
         // Actualizar el contexto del canal
         updateChannelContext(message);
 
-        const query = message.content;
-        const searchContext = await gatherSearchContext(message.channel, query);
-        channelContexts[message.channel.id].push(...searchContext);
+        // Analizar la intención del mensaje
+        const intentAnalysis = await analyzeIntent(message.content);
 
-        // Procesar la cola si el bot no está procesando
-        if (!isProcessing) {
-            processQueue();
+        if(intentAnalysis.isSearchRequest){
+            console.log('Se encontro una petición de búsqueda');
+            // Realizar la búsqueda y obtener los resultados
+            const searchResults = await fetchSearchResults(intentAnalysis.keywords.join(' '));
+
+            if(searchResults.length === 0){
+                // Si no se encontró resultados, procesar el mensaje normalmente
+                console.log('No se encontró resultados');
+                if(!isProcessing) {
+                    processQueue();
+                }
+            } else {
+                // Formatear los resultados para el mensaje de respuesta
+                let searchReply = 'Aquí tienes los resultados de búsqueda:\n';
+                searchResults.slice(0, 3).forEach((result) => {
+                    searchReply += `**${result.title}**\n${result.description}\n${result.link}\n\n`;
+                });
+
+                // Enviar los resultados de la búsqueda
+                await message.channel.send(searchReply);
+            }
+        }else{
+            // Procesar la cola si el bot no está procesando
+            if (!isProcessing) {
+                processQueue();
+            }
         }
     }
 });
+
 
 // Función para actualizar el contexto del canal
 function updateChannelContext(message){
@@ -109,6 +134,36 @@ function updateChannelContext(message){
     // Mantener solo los últimos 'contextSize' mensajes en el contexto
     if (channelContexts[channelId].length > contextSize) {
         channelContexts[channelId].shift();
+    }
+}
+
+async function analyzeIntent(messageContent){
+    const prompt = `
+        Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda.
+        Si es así, extraiga las palabras clave de la solicitud de búsqueda.
+
+        Mensaje: ${messageContent}
+
+        Tienes que devolver esto sin escribir ni una letra de más, ni siquiera una respuesta ingeniosa, 
+        ya que es el resultado que esperamos para analizar, recuerda también que las palabras separadas por un espacio
+        van separadas en el array de keywords:
+        {
+            "isSearchRequest": true/false,
+            "keywords": ["keyword1", "keyword2", ...]
+        }`;
+
+    const response = await model.respond([{
+        role: 'user',
+        content: prompt
+    }]);
+
+    try{
+        var result = JSON.parse(response.content);
+        console.log(result);
+        return result;
+    }catch(e){
+        console.error('Error al intentar analizar las intenciones:', e);
+        return { isSearchRequest: false, keywords: [] };
     }
 }
 
@@ -141,6 +196,7 @@ async function gatherSearchContext(channel, query){
             }
         }
     }
+    
     return searchContext;
 }
 
@@ -166,6 +222,7 @@ function cosineSimilarity(vecA, vecB){
 
 
 async function processQueue() {
+    console.log('Procesando la cola de mensajes...');
     if (messageQueue.length === 0) {
         return;
     }
@@ -179,16 +236,7 @@ async function processQueue() {
     try {
         // Cambiar el estado del bot a "Respondiendo"
         client.user.setActivity('a Responder', { type: ActivityType.Playing });
-
-        // Obtener el contexto del canal
-        const context = channelContexts[message.channel.id] || [];
-
-        // Asegurarse que todos los mensajes en el contexto tengan el campo 'role'
-        context.forEach((msg) => {
-            if (!msg.role) {
-                msg.role = 'user';
-            }
-        });
+        const context = await gatherSearchContext(message.channel, message.content);
 
         // Generar respuesta usando el modelo con contexto
         const prediction = model.respond([
@@ -214,7 +262,7 @@ async function processQueue() {
 
         // Enviar cada fragmento como un mensaje separado
         for (const [index, part] of replies.entries()) {
-            if((context.length > 1 || messageQueue.length > 0) && index === 0) {
+            if(index === 0) {
                 // Enviar el primer fragmento citando el mensaje original si corresponde
                 await message.channel.send({
                     content: part,
@@ -234,7 +282,7 @@ async function processQueue() {
         // Cambiar el estado del bot a "Online"
         client.user.setActivity(`${targetChannelName}`, { type: ActivityType.Watching });
 
-        // Procesar el siguiente mensaje en la cola
+        // Procesar el siguiente mensaje en la cola si la cola no está vacía
         if (messageQueue.length > 0) {
             processQueue();
         }

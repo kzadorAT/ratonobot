@@ -1,7 +1,12 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
-const { LMStudioClient } = require('@lmstudio/sdk');
-const axios = require('axios');
 const { fetchSearchResults } = require('./scrapers/searchScraper');
+const {
+    loadModel,
+    getEmbedding,
+    cosineSimilarity,
+    analyzeIntent,
+    generateResponse
+} = require('./modules/lmHandler');
 require('dotenv').config();
 
 const client = new Client({
@@ -30,17 +35,6 @@ const botEmbeddingLimit = 3; // Numero de mensajes a considerar para la creació
 
 let model;
 
-// Función para cargar el modelo una vez al inicio
-async function loadModel() {
-    try {
-        const lmClient = new LMStudioClient();
-        model = await lmClient.llm.load('QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/Meta-Llama-3-8B-Instruct.Q8_0.gguf'); // Cambiar el modelo aqui
-        console.log('Modelo cargado exitosamente');
-    } catch (error) {
-        console.error('Error al cargar el modelo:', error);
-    }
-}
-
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
     
@@ -48,7 +42,7 @@ client.once('ready', async () => {
     client.user.setActivity(`${targetChannelName}`, { type: ActivityType.Watching });
     
     // Cargar el modelo cuando el bot se conecta
-    await loadModel();
+    model = await loadModel();
 });
 
 client.on('messageCreate', async (message) => {
@@ -137,36 +131,6 @@ function updateChannelContext(message){
     }
 }
 
-async function analyzeIntent(messageContent){
-    const prompt = `
-        Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda.
-        Si es así, extraiga las palabras clave de la solicitud de búsqueda.
-
-        Mensaje: ${messageContent}
-
-        Tienes que devolver esto sin escribir ni una letra de más, ni siquiera una respuesta ingeniosa, 
-        ya que es el resultado que esperamos para analizar, recuerda también que las palabras separadas por un espacio
-        van separadas en el array de keywords:
-        {
-            "isSearchRequest": true/false,
-            "keywords": ["keyword1", "keyword2", ...]
-        }`;
-
-    const response = await model.respond([{
-        role: 'user',
-        content: prompt
-    }]);
-
-    try{
-        var result = JSON.parse(response.content);
-        console.log(result);
-        return result;
-    }catch(e){
-        console.error('Error al intentar analizar las intenciones:', e);
-        return { isSearchRequest: false, keywords: [] };
-    }
-}
-
 async function gatherSearchContext(channel, query){
     const messages = await channel.messages.fetch({ limit: 100 });
     const searchContext = [];
@@ -200,27 +164,6 @@ async function gatherSearchContext(channel, query){
     return searchContext;
 }
 
-async function getEmbedding(text) {
-    const response = await axios.post('http://localhost:1234/v1/embeddings', {
-        input: text,
-        model: 'nomic-ai/nomic-embed-text-v1.5-GGUF/nomic-embed-text-v1.5.Q5_K_M.gguf'
-    }, {
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    });
-
-    return response.data.data[0].embedding;
-}
-
-function cosineSimilarity(vecA, vecB){
-    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
-    const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
-    const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
-    return dotProduct / (magnitudeA * magnitudeB);
-}
-
-
 async function processQueue() {
     console.log('Procesando la cola de mensajes...');
     if (messageQueue.length === 0) {
@@ -239,22 +182,7 @@ async function processQueue() {
         const context = await gatherSearchContext(message.channel, message.content);
 
         // Generar respuesta usando el modelo con contexto
-        const prediction = model.respond([
-            { role: 'system', content: `
-                Te retiraste de QA para ser programador y tratas de encontrar alguna solución a 
-                cualquier cosa que te dicen, tratas de responder siempre con gracia y humor. El nombre del
-                usuario que te manda el mensaje está antes de los dos puntos, pero solo al comienzo, 
-                el usuario que te manda el mensaje es al que respondes. Puedes usar el nombre de otro
-                usuario para responder, pero solo si dices algo referente a ese usuario citado 
-                que haya dicho o contado que hizo, pero referente a lo que te están hablando.` },
-            ...context,
-            { role: 'user', content: `${message.author.displayName}: ${message.content}` }
-        ]);
-    
-        let reply = '';
-        for await (const text of prediction) {
-            reply += text;
-        }
+        const reply = await generateResponse(context, `${message.author.displayName}: ${message.content}`);
 
         // Dividir el mensaje en fragmentos de 2000 caracteres o menos
         const maxLength = 2000;

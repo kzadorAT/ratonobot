@@ -90,6 +90,8 @@ client.on('messageCreate', async (message) => {
 
                 // Enviar los resultados de la búsqueda
                 await message.channel.send(searchReply);
+                // Remover el mensaje de busqueda de la cola si se encontro resultados
+                messageQueue.shift();
             }
         }else{
             // Procesar la cola si el bot no está procesando

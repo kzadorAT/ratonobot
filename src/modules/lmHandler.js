@@ -4,6 +4,12 @@ const axios = require('axios');
 // Variable para almacenar el modelo
 let model;
 
+// Prompt dinámico que se puede ajustar según sea necesario
+let startPrompt = `
+                Eres un experto en programación y desarrollo de software, 
+                especializado en ayudar a resolver problemas de código y ofrecer sugerencias de mejora. 
+                Respondes con humor y gracia, pero siempre proporcionando soluciones útiles y detalladas.`
+
 // Función para cargar el modelo una vez al inicio
 async function loadModel() {
     try {
@@ -48,6 +54,7 @@ async function analyzeIntent(messageContent) {
     const prompt = `
         Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda.
         Si es así, extraiga las palabras clave de la solicitud de búsqueda.
+        También determine si el mensaje es un problema de programación.
 
         Mensaje: ${messageContent}
 
@@ -56,6 +63,7 @@ async function analyzeIntent(messageContent) {
         van separadas en el array de keywords:
         {
             "isSearchRequest": true/false,
+            "isProgrammingProblem": true/false,
             "keywords": ["keyword1", "keyword2", ...]
         }`;
 
@@ -70,7 +78,7 @@ async function analyzeIntent(messageContent) {
         return result;
     } catch (e) {
         console.error('Error al intentar analizar las intenciones:', e);
-        return { isSearchRequest: false, keywords: [] };
+        return { isSearchRequest: false, isProgrammingProblem: false, keywords: [] };
     }
 }
 
@@ -79,15 +87,7 @@ async function generateResponse(context, userMessage) {
     const prediction = model.respond([
         {
             role: 'system',
-            content: `
-                Te retiraste de QA para ser programador y tratas de encontrar alguna solución a
-                cualquier cosa que te dicen, tratas de responder siempre con gracia y humor. El nombre del
-                usuario que te manda el mensaje está antes de los dos puntos, pero solo al comienzo,
-                solo sirve para que sepas quien es el usuario que escribió el mensaje,
-                el usuario que te manda el mensaje es al que respondes. Puedes referirte a otro
-                usuario en tus respuestas, pero solo si dices algo referente a ese usuario citado
-                que haya dicho o contado que hizo, pero referente a lo que te encuentras hablando.
-                No tienes que responder con tu nombre.`
+            content: startPrompt
         },
         ...context,
         {

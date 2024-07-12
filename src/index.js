@@ -1,11 +1,12 @@
-const { setupDiscordHandlers, login } = require('./modules/discordHanlder');
+const { setupDiscordHandlers, login } = require('./modules/discordHandler');
 const { fetchSearchResults } = require('./scrapers/googleScraper');
 const {
     loadModel,
     getEmbedding,
     cosineSimilarity,
     analyzeIntent,
-    generateResponse
+    generateResponse,
+    extractMusicKeywords
 } = require('./modules/lmHandler');
 require('dotenv').config();
 
@@ -15,6 +16,7 @@ setupDiscordHandlers({
     generateResponse,
     getEmbedding,
     cosineSimilarity,
+    extractMusicKeywords,
     loadModel
 });
 

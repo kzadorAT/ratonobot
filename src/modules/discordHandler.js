@@ -1,4 +1,6 @@
+const axios = require('axios');
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 require('dotenv').config();
 
 const client = new Client({
@@ -143,7 +145,7 @@ async function processQueue(generateResponse, getEmbedding, cosineSimilarity){
     }
 }
 
-async function handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity){
+async function handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, extractMusicKeywords){
     if (message.author.bot) return; // Ignorar mensajes de otros bots
 
     // Verifica si el mensaje proviene del canal especificado
@@ -168,7 +170,7 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
         // Analizar la intención del mensaje
         const intentAnalysis = await analyzeIntent(message.content);
 
-        if(intentAnalysis.isSearchRequest && !intentAnalysis.isProgrammingProblem){
+        if(intentAnalysis.isSearchRequest && !intentAnalysis.isProgrammingProblem && !intentAnalysis.isMusicRequest){
             console.log('Se encontro una petición de búsqueda');
             // Realizar la búsqueda y obtener los resultados
             const searchResults = await fetchSearchResults(intentAnalysis.keywords.join(' '));
@@ -192,11 +194,17 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
                 messageQueue.shift();
             }
         }
-        else if(intentAnalysis.isProgrammingProblem){
+        else if(intentAnalysis.isProgrammingProblem && !intentAnalysis.isMusicRequest){
             console.log('Se encontro un problema de programación');
             if(!isProcessing){
                 processQueue(generateResponse, getEmbedding, cosineSimilarity);
             }
+        }
+        else if(intentAnalysis.isMusicRequest){
+            console.log('Se encontro una solicitud de generación de música');
+            const musicKeywords = await extractMusicKeywords(message.content);
+            const musicResponse = await handleMusicRequest(musicKeywords);
+            await message.channel.send(musicResponse);
         }
         else{
             // Procesar la cola si el bot no está procesando
@@ -207,14 +215,46 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
     }
 }
 
-function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, loadModel }){
+async function handleMusicRequest(keywords){
+
+    const prompt = keywords.lyrics;
+    const style = keywords.style;
+    const title = keywords.title || 'Generated song';
+    const makeInstrumental = keywords.makeInstrumental || false;
+    const model = keywords.model || 'chirp-v3-5|chirp-v3-0';
+    const waitAudio = keywords.waitAudio || false;
+
+    const requestBody = {
+        prompt: prompt,
+        tags: style,
+        title: title,
+        make_instrumental: makeInstrumental,
+        model: model,
+        wait_audio: true
+    };
+
+    try {
+        const response = await axios.post('http://localhost:3000/api/custom_generate', requestBody, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        return `Aquí está el enlace de tu canción: ${response.data.audio_url}`;
+    } catch (error) {
+        console.error('Error al generar la cancion:', error);
+        return 'Hubo un error al generar la cancion, por favor intenta de nuevo más tarde.'
+    }
+}
+
+function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, extractMusicKeywords, loadModel }){
     client.once('ready', async () => {
         console.log(`Logged in as ${client.user.tag}!`);
         client.user.setActivity(`${targetChannelName}`, { type: ActivityType.Watching });
         model = await loadModel();
     });
 
-    client.on('messageCreate', (message) => handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity));
+    client.on('messageCreate', (message) => handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, extractMusicKeywords, model));
 
     process.on('SIGINT', handleShutdown); // Ctrl + C en la terminal
     process.on('SIGTERM', handleShutdown); // Señales de cierre del sistema
@@ -233,5 +273,6 @@ function login(token){
 
 module.exports = {
     setupDiscordHandlers,
-    login
+    login,
+    handleMessage
 };

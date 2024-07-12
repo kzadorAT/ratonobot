@@ -52,20 +52,19 @@ function cosineSimilarity(vecA, vecB) {
 // Función para analizar la intención de un mensaje
 async function analyzeIntent(messageContent) {
     const prompt = `
-        Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda.
-        Si es así, extraiga las palabras clave de la solicitud de búsqueda.
-        También determine si el mensaje es un problema de programación.
+        Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda, presentando un problema de programación, o solicitando generación de música.
+        Devuelve el resultado en el siguiente formato JSON:
 
-        Mensaje: ${messageContent}
-
-        Tienes que devolver esto sin escribir ni una letra de más, ni siquiera una respuesta ingeniosa,
-        ya que es el resultado que esperamos para analizar, recuerda también que las palabras separadas por un espacio
-        van separadas en el array de keywords:
         {
             "isSearchRequest": true/false,
             "isProgrammingProblem": true/false,
+            "isMusicRequest": true/false,
             "keywords": ["keyword1", "keyword2", ...]
-        }`;
+        }
+
+        Mensaje: "${messageContent}"
+
+        Responde estrictamente en el formato JSON indicado sin ninguna otra explicación.`;
 
     const response = await model.respond([{
         role: 'user',
@@ -73,7 +72,7 @@ async function analyzeIntent(messageContent) {
     }]);
 
     try {
-        var result = JSON.parse(response.content);
+        var result = JSON.parse(response.content.trim());
         console.log(result);
         return result;
     } catch (e) {
@@ -103,10 +102,42 @@ async function generateResponse(context, userMessage) {
     return reply;
 }
 
+// Función para extraer palabras clave de una solicitud de música
+async function extractMusicKeywords(messageContent) {
+    const prompt = `
+    Dado el siguiente mensaje, extrae el título de la canción, la letra y el estilo de música.
+    Devuelve el resultado en el siguiente formato JSON:
+
+    {
+        "title": "title",
+        "lyrics": "lyrics",
+        "style": "style"
+    }
+
+    Mensaje: "${messageContent}"
+
+    Responde estrictamente en el formato JSON indicado sin ninguna otra explicación.`;
+
+    const response = await model.respond([{
+        role: 'user',
+        content: prompt
+    }]);
+
+    try {
+        var result = JSON.parse(response.content.trim());
+        console.log(result);
+        return result;
+    } catch (e) {
+        console.error('Error al intentar analizar las palabras clave de la musica:', e);
+        return { title: '', lyrics: '', style: '' };
+    }
+}
+
 module.exports = {
     loadModel,
     getEmbedding,
     cosineSimilarity,
     analyzeIntent,
-    generateResponse
+    generateResponse,
+    extractMusicKeywords
 }

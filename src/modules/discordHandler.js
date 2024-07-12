@@ -6,6 +6,7 @@ require('dotenv').config();
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
     ]
@@ -149,7 +150,7 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
     if (message.author.bot) return; // Ignorar mensajes de otros bots
 
     // Verifica si el mensaje proviene del canal especificado
-    if(message.channel.name === targetChannelName){
+    if(!message.content.startsWith('!join') && !message.content.startsWith('!leave') && message.channel.name === targetChannelName){
         // Si el modelo no se ha cargado, ignorar el mensaje
         if(!model){
             message.reply('Loco, no me jodas ahora, esperate un segundo que estoy loading, ja.');
@@ -170,7 +171,7 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
         // Analizar la intención del mensaje
         const intentAnalysis = await analyzeIntent(message.content);
 
-        if(intentAnalysis.isSearchRequest && !intentAnalysis.isProgrammingProblem && !intentAnalysis.isMusicRequest){
+        if( intentAnalysis.isSearchRequest && !intentAnalysis.isProgrammingProblem && !intentAnalysis.isMusicRequest){
             console.log('Se encontro una petición de búsqueda');
             // Realizar la búsqueda y obtener los resultados
             const searchResults = await fetchSearchResults(intentAnalysis.keywords.join(' '));
@@ -212,8 +213,40 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
                 processQueue(generateResponse, getEmbedding, cosineSimilarity);
             }
         }
+    } else if (message.content === '!join' && message.member.voice.channel) {
+        // Unirse a un canal de voz
+        const channel = message.member.voice.channel;
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator
+        });
+        
+        const player = createAudioPlayer();
+        const resource = createAudioResource('./src/audios/no mas dailys.mp3');
+
+        player.play(resource);
+        connection.subscribe(player);
+
+        // player.on(AudioPlayerStatus.Idle, () => {
+        //     connection.destroy();
+        // });
+
+        message.reply('Llego el bot!');
+    } else if (message.content === '!leave' && message.member.voice.channel) {
+        // Desconectar del canal de voz
+        const channel = message.member.voice.channel;
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+        });
+
+        connection.destroy();
+        message.reply('Que lástima pero adios...');
     }
 }
+
 
 async function handleMusicRequest(keywords){
 

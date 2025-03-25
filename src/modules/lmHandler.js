@@ -14,7 +14,7 @@ let startPrompt = `
 async function loadModel() {
     try {
         const lmClient = new LMStudioClient();
-        model = await lmClient.llm.load('QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/Meta-Llama-3-8B-Instruct.Q8_0.gguf'); // Cambiar el modelo aqui
+        model = await lmClient.llm.load('deepseek-r1-distill-qwen-7b'); // Cambiar el modelo aqui
         console.log('Modelo cargado exitosamente');
         return model;
     } catch (error) {
@@ -28,7 +28,7 @@ async function getEmbedding(text) {
     try {
         const response = await axios.post('http://localhost:1234/v1/embeddings', {
             input: text,
-            model: 'nomic-ai/nomic-embed-text-v1.5-GGUF/nomic-embed-text-v1.5.Q5_K_M.gguf'
+            model: 'text-embedding-nomic-embed-text-v1.5'
         }, {
             headers: {
                 'Content-Type': 'application/json'
@@ -72,7 +72,18 @@ async function analyzeIntent(messageContent) {
     }]);
 
     try {
-        var result = JSON.parse(response.content.trim());
+        // Mostrar thinking en consola
+        const thinkingMatch = response.content.match(/<think>([\s\S]*?)<\/think>/);
+        if (thinkingMatch && thinkingMatch[1]) {
+            console.log('Thinking:\n', thinkingMatch[1].trim());
+        }
+
+        // Extraer JSON
+        const jsonMatch = response.content.match(/```json\n([\s\S]*?)\n```/);
+        if (!jsonMatch || !jsonMatch[1]) {
+            throw new Error('No se encontró JSON válido en la respuesta');
+        }
+        var result = JSON.parse(jsonMatch[1].trim());
         console.log(result);
         return result;
     } catch (e) {
@@ -96,8 +107,25 @@ async function generateResponse(context, userMessage) {
     ]);
 
     let reply = '';
-    for await(const text of prediction) {
-        reply += text;
+    let thinking = false;
+    for await(const chunk of prediction) {
+        const text = chunk.content || ''; // Extraer el contenido del chunk
+        const textStr = String(text); // Convertir a string
+
+        // Detectar si la IA está pensando usando reasoningType
+        if (chunk.reasoningType === 'reasoning') {
+            if (!thinking) {
+                thinking = true;
+                console.log('Thinking...');
+            }
+            process.stdout.write(textStr); // Mostrar el texto en tiempo real
+        } else if (chunk.reasoningType === 'reasoningEndTag') {
+            thinking = false;
+            process.stdout.write('\n'); // Asegurar un salto de línea al final
+            console.log('Finished thinking.');
+        } else {
+            reply += textStr;
+        }
     }
     return reply;
 }
@@ -124,6 +152,7 @@ async function extractMusicKeywords(messageContent) {
     }]);
 
     try {
+        console.log('Response content:', response.content);
         var result = JSON.parse(response.content.trim());
         console.log(result);
         return result;

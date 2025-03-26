@@ -52,13 +52,11 @@ function cosineSimilarity(vecA, vecB) {
 // Función para analizar la intención de un mensaje
 async function analyzeIntent(messageContent) {
     const prompt = `
-        Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda, presentando un problema de programación, o solicitando generación de música.
+        Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda en línea.
         Devuelve el resultado en el siguiente formato JSON:
 
         {
             "isSearchRequest": true/false,
-            "isProgrammingProblem": true/false,
-            "isMusicRequest": true/false,
             "keywords": ["keyword1", "keyword2", ...]
         }
 
@@ -88,7 +86,7 @@ async function analyzeIntent(messageContent) {
         return result;
     } catch (e) {
         console.error('Error al intentar analizar las intenciones:', e);
-        return { isSearchRequest: false, isProgrammingProblem: false, keywords: [] };
+        return { isSearchRequest: false, keywords: [] };
     }
 }
 

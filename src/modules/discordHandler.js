@@ -59,17 +59,22 @@ function updateChannelContext(message){
     }
 }
 
-async function gatherSearchContext(channel, query, getEmbedding, cosineSimilarity){
-    const messages = await channel.messages.fetch({ limit: 100 });
+async function gatherSearchContext(channel, query, getEmbedding, cosineSimilarity, referenceMessageId){
+    const activityLevel = await calculateChannelActivity(channel);
+    const messageLimit = Math.min(Math.round(100 * activityLevel), 100);
+    const messages = await channel.messages.fetch({ limit: messageLimit });
     const searchContext = [];
 
     const queryEmbedding = await getEmbedding(query);
+    const similarities = [];
 
     for (const msg of messages.values()) {
-        if(msg.author.id !== client.user.id){
+        if(msg.author.id !== client.user.id && msg.id !== referenceMessageId) {
             const messageEmbedding = await getEmbedding(msg.content);
             const similarity = cosineSimilarity(queryEmbedding, messageEmbedding);
-            if(similarity > 0.6){
+            similarities.push(similarity);
+
+            if(similarity > calculateDynamicThreshold(similarities)){
                 console.log(`Message: ${msg.content} - Similarity: ${similarity} - Author: ${msg.author.displayName}`);
                 searchContext.push({
                     role: 'user',
@@ -107,7 +112,7 @@ async function processQueue(generateResponse, getEmbedding, cosineSimilarity){
     try {
         // Cambiar el estado del bot a "Respondiendo"
         client.user.setActivity('a Responder', { type: ActivityType.Playing });
-        const context = await gatherSearchContext(message.channel, message.content, getEmbedding, cosineSimilarity);
+        const context = await gatherSearchContext(message.channel, message.content, getEmbedding, cosineSimilarity, message.id);
 
         // Generar respuesta usando el modelo con contexto 
         const reply = await generateResponse(context, `${message.author.displayName}: ${message.content}`);
@@ -146,11 +151,11 @@ async function processQueue(generateResponse, getEmbedding, cosineSimilarity){
     }
 }
 
-async function handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, extractMusicKeywords){
+async function handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity){
     if (message.author.bot) return; // Ignorar mensajes de otros bots
 
     // Verifica si el mensaje proviene del canal especificado
-    if(!message.content.startsWith('!join') && !message.content.startsWith('!leave') && message.channel.name === targetChannelName){
+    if(message.channel.name === targetChannelName){
         // Si el modelo no se ha cargado, ignorar el mensaje
         if(!model){
             message.reply('Loco, no me jodas ahora, esperate un segundo que estoy loading, ja.');
@@ -171,8 +176,8 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
         // Analizar la intención del mensaje
         const intentAnalysis = await analyzeIntent(message.content);
 
-        if( intentAnalysis.isSearchRequest && !intentAnalysis.isProgrammingProblem && !intentAnalysis.isMusicRequest){
-            console.log('Se encontro una petición de búsqueda');
+        if(intentAnalysis.isSearchRequest){
+            console.log('Se encontró una petición de búsqueda');
             // Realizar la búsqueda y obtener los resultados
             const searchResults = await fetchSearchResults(intentAnalysis.keywords.join(' '));
 
@@ -191,23 +196,10 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
 
                 // Enviar los resultados de la búsqueda
                 await message.channel.send(searchReply);
-                // Remover el mensaje de busqueda de la cola si se encontro resultados
+                // Remover el mensaje de búsqueda de la cola si se encontró resultados
                 messageQueue.shift();
             }
-        }
-        else if(intentAnalysis.isProgrammingProblem && !intentAnalysis.isMusicRequest){
-            console.log('Se encontro un problema de programación');
-            if(!isProcessing){
-                processQueue(generateResponse, getEmbedding, cosineSimilarity);
-            }
-        }
-        else if(intentAnalysis.isMusicRequest){
-            console.log('Se encontro una solicitud de generación de música');
-            const musicKeywords = await extractMusicKeywords(message.content);
-            const musicResponse = await handleMusicRequest(musicKeywords);
-            await message.channel.send(musicResponse);
-        }
-        else{
+        }else{
             // Procesar la cola si el bot no está procesando
             if(!isProcessing){
                 processQueue(generateResponse, getEmbedding, cosineSimilarity);
@@ -247,47 +239,14 @@ async function handleMessage(message, analyzeIntent, fetchSearchResults, generat
     }
 }
 
-
-async function handleMusicRequest(keywords){
-
-    const prompt = keywords.lyrics;
-    const style = keywords.style;
-    const title = keywords.title || 'Generated song';
-    const makeInstrumental = keywords.makeInstrumental || false;
-    const model = keywords.model || 'chirp-v3-5|chirp-v3-0';
-    const waitAudio = keywords.waitAudio || false;
-
-    const requestBody = {
-        prompt: prompt,
-        tags: style,
-        title: title,
-        make_instrumental: makeInstrumental,
-        model: model,
-        wait_audio: true
-    };
-
-    try {
-        const response = await axios.post('http://localhost:3000/api/custom_generate', requestBody, {
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        return `Aquí está el enlace de tu canción: ${response.data.audio_url}`;
-    } catch (error) {
-        console.error('Error al generar la cancion:', error);
-        return 'Hubo un error al generar la cancion, por favor intenta de nuevo más tarde.'
-    }
-}
-
-function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, extractMusicKeywords, loadModel }){
+function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, loadModel }){
     client.once('ready', async () => {
         console.log(`Logged in as ${client.user.tag}!`);
         client.user.setActivity(`${targetChannelName}`, { type: ActivityType.Watching });
         model = await loadModel();
     });
 
-    client.on('messageCreate', (message) => handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, extractMusicKeywords, model));
+    client.on('messageCreate', (message) => handleMessage(message, analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity));
 
     process.on('SIGINT', handleShutdown); // Ctrl + C en la terminal
     process.on('SIGTERM', handleShutdown); // Señales de cierre del sistema
@@ -302,6 +261,46 @@ function handleShutdown(){
 
 function login(token){
     client.login(token);
+}
+
+async function calculateChannelActivity(channel) {
+    const now = Date.now();
+    const oneDayAgo = now - (24 * 60 * 60 * 1000);
+
+    // Obtener mensajes de las últimas 24 horas
+    const messages = await channel.messages.fetch({ limit: 100, after: oneDayAgo });
+
+    // Calcular métricas
+    const uniqueUsers = new Set();
+    let totalMessages = 0;
+    let messageFrequency = 0;
+
+    messages.forEach(msg => {
+        uniqueUsers.add(msg.author.id);
+        totalMessages++;
+    });
+
+    // Calcular frecuencia de mensajes por hora
+    if(messages.size > 0) {
+        const firstMessage = messages.last();
+        const lastMessage = messages.first();
+        const timeDiffHours = (lastMessage.createdTimestamp - firstMessage.createdTimestamp) / (1000 * 60 * 60);
+        messageFrequency = totalMessages / Math.max(1, timeDiffHours);
+    }
+
+    // Normalizar métricas
+    const userScore = Math.min(uniqueUsers.size / 50, 1); // Máximo 50 usuarios
+    const messageScore = Math.min(totalMessages / 200, 1); // Máximo 200 mensajes
+    const frequencyScore = Math.min(messageFrequency / 20, 1); // Máximo 20 msg/hora
+
+    // Ponderar métricas
+    return (userScore * 0.4) + (messageScore * 0.4) + (frequencyScore * 0.2);
+}
+
+function calculateDynamicThreshold(similarities) {
+    const mean = similarities.reduce((a, b) => a + b, 0) / similarities.length;
+    const stdDev = Math.sqrt(similarities.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / similarities.length);
+    return Math.max(0.5, mean - stdDev);
 }
 
 module.exports = {

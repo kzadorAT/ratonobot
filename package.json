@@ -4,7 +4,8 @@
   "description": "Es solo un simple bot, antes no pude hacerlo, pero ahora vere que si.,",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start" : "node ./src/index.js"
   },
   "repository": {
     "type": "git",

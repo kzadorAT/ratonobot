@@ -23,6 +23,18 @@ async function loadModel() {
     }
 }
 
+// Función para descargar el modelo
+async function unloadModel() {
+    try {
+        if (model) {
+            await model.unload();
+            console.log('Modelo descargado exitosamente');
+        }
+    } catch (error) {
+        console.error('Error al descargar el modelo:', error);
+    }
+}
+
 // Función para obtener el embedding de un texto
 async function getEmbedding(text) {
     try {
@@ -162,6 +174,7 @@ async function extractMusicKeywords(messageContent) {
 
 module.exports = {
     loadModel,
+    unloadModel,
     getEmbedding,
     cosineSimilarity,
     analyzeIntent,

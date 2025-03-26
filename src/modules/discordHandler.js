@@ -2,6 +2,7 @@ const axios = require('axios');
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 require('dotenv').config();
+const { unloadModel } = require('./lmHandler');
 
 const client = new Client({
     intents: [
@@ -255,8 +256,10 @@ function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateRespo
 function handleShutdown(){
     client.user.setActivity('Que lastima pero adiós...', { type: ActivityType.Listening });
     console.log('Cerrando el bot de Discord...');
-    client.destroy();
-    process.exit();
+    unloadModel().then(() => {
+        client.destroy();
+        process.exit();
+    });
 }
 
 function login(token){

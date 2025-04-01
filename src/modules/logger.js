@@ -1,5 +1,5 @@
-const winston = require('winston');
-const chalk = require('chalk');
+import winston from 'winston';
+import chalk from 'chalk';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -48,4 +48,4 @@ const logger = winston.createLogger({
   ]
 });
 
-module.exports = logger;
+export default logger;

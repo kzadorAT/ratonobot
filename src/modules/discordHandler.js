@@ -1,13 +1,13 @@
-const axios = require('axios');
-const { Client, GatewayIntentBits, ActivityType, REST, Routes } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-require('dotenv').config();
-const { unloadModel } = require('./lmHandler');
-const { addMessage, processQueue } = require('./messageQueue');
-const { getChannelContext } = require('./channelContext');
-const { fetchSearchResults } = require('./searchHandler');
-const aiProvider = require('./aiProvider');
-const logger = require('./logger');
+import axios from 'axios';
+import { Client, GatewayIntentBits, ActivityType, REST, Routes } from 'discord.js';
+import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import 'dotenv/config';
+import { unloadModel } from './lmHandler.js';
+import { addMessage, processQueue } from './messageQueue.js';
+import { getChannelContext } from './channelContext.js';
+import { fetchSearchResults } from './searchHandler.js';
+import aiProvider from './aiProvider.js';
+import logger from './logger.js';
 
 const client = new Client({
     intents: [
@@ -47,18 +47,22 @@ const commands = [
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-(async () => {
+client.once('ready', async () => {
+    logger.info(`Logged in as ${client.user.tag}!`);
+    client.user.setActivity(`${targetChannelName}`, { type: ActivityType.Watching });
+
+    // Registrar comandos slash después de que el cliente esté listo
     try {
         logger.info('Registrando comandos slash globalmente...');
         await rest.put(
-            Routes.applicationCommands(process.env.APP_ID), // Registrar globalmente
+            Routes.applicationCommands(process.env.APP_ID),
             { body: commands }
         );
         logger.info('Comandos slash registrados exitosamente.');
     } catch (error) {
         logger.error('Error al registrar comandos slash:', error);
     }
-})();
+});
 
 // Manejar el comando slash
 client.on('interactionCreate', async interaction => {
@@ -66,8 +70,14 @@ client.on('interactionCreate', async interaction => {
 
     if (interaction.commandName === 'detect-bots') {
         detectBots = !detectBots;
-        await interaction.reply(`Detección de bots ${detectBots ? 'activada' : 'desactivada'}.`);
+        const message = `Detección de bots ${detectBots ? 'activada' : 'desactivada'}.`;
+        logger.info(message);
+        console.log(message);
+        await interaction.reply(message);
     }
+});
+
+client.on('messageCreate', async message => {
 });
 
 async function gatherSearchContext(channel, query, getEmbedding, cosineSimilarity, referenceMessageId){
@@ -177,11 +187,6 @@ function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateRespo
     if (isHandlersSetup) return;
     isHandlersSetup = true;
 
-    client.once('ready', async () => {
-        logger.info(`Logged in as ${client.user.tag}!`);
-        client.user.setActivity(`${targetChannelName}`, { type: ActivityType.Watching });
-    });
-
     client.on('messageCreate', (message) => handleMessage(message, analyzeIntent, generateResponse, getEmbedding, cosineSimilarity, selectedProvider, selectedModel));
 
     process.on('SIGINT', handleShutdown); // Ctrl + C en la terminal
@@ -282,7 +287,7 @@ async function sendLongMessage(channel, content, duration) {
   }
 }
 
-module.exports = {
+export {
     setupDiscordHandlers,
     login,
     handleMessage

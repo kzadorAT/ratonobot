@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 async function fetchSearchResults(query) {
     const apiKey = process.env.GOOGLE_API_KEY;
@@ -21,4 +21,4 @@ async function fetchSearchResults(query) {
     }
 }
 
-module.exports = { fetchSearchResults };
+export { fetchSearchResults };

@@ -1,10 +1,6 @@
-const express = require('express');
-const app = express();
-app.use(express.json());
-
-const { setupDiscordHandlers, login } = require('./modules/discordHandler');
-const { fetchSearchResults } = require('./scrapers/googleScraper');
-const {
+import express from 'express';
+import { setupDiscordHandlers, login } from './modules/discordHandler.js';
+import {
     loadModel,
     getEmbedding,
     cosineSimilarity,
@@ -12,11 +8,15 @@ const {
     generateResponse,
     extractMusicKeywords,
     getAvailableModels
-} = require('./modules/lmHandler');
-const readline = require('readline');
-const aiProvider = require('./modules/aiProvider');
-const logger = require('./modules/logger');
-require('dotenv').config();
+} from './modules/lmHandler.js';
+import readline from 'readline';
+import aiProvider from './modules/aiProvider.js';
+import logger from './modules/logger.js';
+import 'dotenv/config';
+import { select } from '@inquirer/prompts';
+
+const app = express();
+app.use(express.json());
 
 app.post('/select-ai', (req, res) => {
   const { aiName } = req.body;
@@ -29,32 +29,12 @@ app.post('/select-ai', (req, res) => {
 });
 
 async function selectProvider() {
-  const providers = ['LM Studio', 'crofAI'];
-  logger.info('Proveedores disponibles:');
-  providers.forEach((provider, index) => {
-    logger.info(`${index + 1}. ${provider}`);
-  });
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: ''
-  });
-
-  rl.on('SIGINT', () => {
-    rl.close();
-  });
-
-  return new Promise((resolve) => {
-    rl.question('Seleccione un proveedor (número): ', (answer) => {
-      const selectedIndex = parseInt(answer) - 1;
-      if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= providers.length) {
-        logger.error('Selección inválida.');
-        process.exit(1);
-      }
-      rl.close();
-      resolve(providers[selectedIndex]);
-    });
+  return await select({
+    message: 'Seleccione un proveedor',
+    choices: [
+      { name: 'LM Studio', value: 'LM Studio' },
+      { name: 'crofAI', value: 'crofAI' }
+    ]
   });
 }
 
@@ -104,35 +84,13 @@ async function selectModel() {
 
 async function selectCrofAIModel() {
   const models = ['llama3-8b', 'llama3.1-8b', 'llama3.3-70b', 'llama3.2-1b', 'llama3-70b', 'llama3.1-405b', 'llama3.1-tulu3-405b', 'deepseek-r1', 'deepseek-v3', 'deepseek-v3-0324', 'deepseek-r1-distill-llama-70b', 'deepseek-r1-distill-qwen-32b', 'qwen-qwq-32b', 'gemma-3-27b-it'];
-  logger.info('Modelos disponibles de CrofAI:');
-  models.forEach((model, index) => {
-    logger.info(`${index + 1}. ${model}`);
-  });
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: ''
-  });
-
-  rl.on('SIGINT', () => {
-    rl.close();
-  });
-
-  return new Promise((resolve) => {
-    rl.question('Seleccione un modelo (número): ', (answer) => {
-      const selectedIndex = parseInt(answer) - 1;
-      if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= models.length) {
-        logger.error('Selección inválida.');
-        process.exit(1);
-      }
-      rl.close();
-      resolve(models[selectedIndex]);
-    });
+  return await select({
+    message: 'Seleccione un modelo',
+    choices: models.map(model => ({ name: model, value: model }))
   });
 }
 
-async function main() {
+async function setupAI() {
   const selectedProvider = await selectProvider();
   let selectedModel;
   if (selectedProvider === 'LM Studio') {
@@ -143,9 +101,15 @@ async function main() {
     logger.info(`Usando crofAI con el modelo ${selectedModel}.`);
   }
 
-  setupDiscordHandlers({
+  return { selectedProvider, selectedModel };
+}
+
+async function main() {
+  const { selectedProvider, selectedModel } = await setupAI();
+
+  // Configurar la IA primero
+  await setupDiscordHandlers({
     analyzeIntent,
-    fetchSearchResults,
     generateResponse,
     getEmbedding,
     cosineSimilarity,
@@ -155,12 +119,14 @@ async function main() {
     selectedModel
   });
 
+  // Conectar a Discord después de que la IA esté configurada
   login(process.env.DISCORD_TOKEN);
-}
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  logger.info(`Server listening on port ${port}`);
-});
+  // Iniciar el servidor Express después de que todo esté listo
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    logger.info(`Server listening on port ${port}`);
+  });
+}
 
 main();

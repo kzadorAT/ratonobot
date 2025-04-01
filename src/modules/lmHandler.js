@@ -1,6 +1,6 @@
-const { LMStudioClient } = require('@lmstudio/sdk');
-const axios = require('axios');
-const logger = require('./logger');
+import { LMStudioClient } from '@lmstudio/sdk';
+import axios from 'axios';
+import logger from './logger.js';
 
 // Variable para almacenar el modelo
 let model;
@@ -193,7 +193,7 @@ async function getAvailableModels() {
     }
 }
 
-module.exports = {
+export {
     loadModel,
     unloadModel,
     getEmbedding,

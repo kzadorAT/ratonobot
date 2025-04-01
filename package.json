@@ -1,6 +1,7 @@
 {
   "name": "ratonobot",
   "version": "1.0.0",
+  "type": "module",
   "description": "Es solo un simple bot, antes no pude hacerlo, pero ahora vere que si.,",
   "main": "index.js",
   "scripts": {
@@ -20,6 +21,7 @@
   "homepage": "https://github.com/kzadorAT/ratonobot#readme",
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
+    "@inquirer/prompts": "^7.4.0",
     "@lmstudio/sdk": "^1.0.1",
     "axios": "^1.7.2",
     "chalk": "^4.1.2",
@@ -27,8 +29,9 @@
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
+    "inquirer": "^12.5.0",
     "libsodium-wrappers": "^0.7.14",
-    "openai": "^4.90.0",
+    "openai": "^5.0.0-alpha.0",
     "winston": "^3.17.0"
   }
 }

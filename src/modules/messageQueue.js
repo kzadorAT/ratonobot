@@ -1,5 +1,7 @@
 // messageQueue.js
 
+import logger from './logger.js';
+
 const maxQueueSize = 4;
 
 const messageQueue = [];
@@ -18,7 +20,7 @@ function processQueue(callback) {
     }
 }
 
-module.exports = {
+export {
     addMessage,
     processQueue
 };

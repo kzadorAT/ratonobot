@@ -1,5 +1,7 @@
 // channelContext.js
 
+import logger from './logger.js';
+
 const channelContexts = {};
 const contextSize = 5;
 
@@ -19,7 +21,7 @@ function getChannelContext(channelId) {
     return channelContexts[channelId] || [];
 }
 
-module.exports = {
+export {
     updateChannelContext,
     getChannelContext
 };

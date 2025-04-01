@@ -1,5 +1,6 @@
 const { LMStudioClient } = require('@lmstudio/sdk');
 const axios = require('axios');
+const logger = require('./logger');
 
 // Variable para almacenar el modelo
 let model;
@@ -15,10 +16,10 @@ async function loadModel(modelName) {
     try {
         const lmClient = new LMStudioClient();
         model = await lmClient.llm.load(modelName);
-        console.log('Modelo cargado exitosamente');
+        logger.info('Modelo cargado exitosamente');
         return model;
     } catch (error) {
-        console.error('Error al cargar el modelo:', error);
+        logger.error('Error al cargar el modelo:', error);
         return null;
     }
 }
@@ -28,12 +29,12 @@ async function unloadModel() {
     try {
         if (model) {
             await model.unload();
-            console.log('Modelo descargado exitosamente');
+            logger.info('Modelo descargado exitosamente');
         } else {
-            console.log('No hay modelo cargado para descargar.');
+            logger.info('No hay modelo cargado para descargar.');
         }
     } catch (error) {
-        console.error('Error al descargar el modelo:', error);
+        logger.error('Error al descargar el modelo:', error);
     }
 }
 
@@ -51,7 +52,7 @@ async function getEmbedding(text) {
 
         return response.data.data[0].embedding;
     } catch (error) {
-        console.error('Error al obtener el embedding:', error);
+        logger.error('Error al obtener el embedding:', error);
     }
 }
 
@@ -94,7 +95,7 @@ async function analyzeIntent(messageContent, selectedProvider) {
         // Mostrar thinking en consola
         const thinkingMatch = response.content.match(/<think>([\s\S]*?)<\/think>/);
         if (thinkingMatch && thinkingMatch[1]) {
-            console.log('Thinking:\n', thinkingMatch[1].trim());
+            logger.info('Thinking:\n', thinkingMatch[1].trim());
         }
 
         // Extraer JSON
@@ -103,10 +104,10 @@ async function analyzeIntent(messageContent, selectedProvider) {
             throw new Error('No se encontró JSON válido en la respuesta');
         }
         var result = JSON.parse(jsonMatch[1].trim());
-        console.log(result);
+        logger.info(result);
         return result;
     } catch (e) {
-        console.error('Error al intentar analizar las intenciones:', e);
+        logger.error('Error al intentar analizar las intenciones:', e);
         return { isSearchRequest: false, keywords: [] };
     }
 }
@@ -135,13 +136,13 @@ async function generateResponse(context, userMessage) {
         if (chunk.reasoningType === 'reasoning') {
             if (!thinking) {
                 thinking = true;
-                console.log('Thinking...');
+                logger.info('Thinking...');
             }
             process.stdout.write(textStr); // Mostrar el texto en tiempo real
         } else if (chunk.reasoningType === 'reasoningEndTag') {
             thinking = false;
             process.stdout.write('\n'); // Asegurar un salto de línea al final
-            console.log('Finished thinking.');
+            logger.info('Finished thinking.');
         } else {
             reply += textStr;
         }
@@ -171,12 +172,12 @@ async function extractMusicKeywords(messageContent) {
     }]);
 
     try {
-        console.log('Response content:', response.content);
+        logger.info('Response content:', response.content);
         var result = JSON.parse(response.content.trim());
-        console.log(result);
+        logger.info(result);
         return result;
     } catch (e) {
-        console.error('Error al intentar analizar las palabras clave de la musica:', e);
+        logger.error('Error al intentar analizar las palabras clave de la musica:', e);
         return { title: '', lyrics: '', style: '' };
     }
 }
@@ -187,7 +188,7 @@ async function getAvailableModels() {
         const response = await axios.get('http://localhost:1234/api/v0/models');
         return response.data.data.map(model => ({ id: model.id, name: model.id }));
     } catch (error) {
-        console.error('Error al obtener la lista de modelos:', error);
+        logger.error('Error al obtener la lista de modelos:', error);
         return [];
     }
 }

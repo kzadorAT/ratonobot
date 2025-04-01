@@ -7,6 +7,7 @@ const { addMessage, processQueue } = require('./messageQueue');
 const { getChannelContext } = require('./channelContext');
 const { fetchSearchResults } = require('./searchHandler');
 const aiProvider = require('./aiProvider');
+const logger = require('./logger');
 
 const client = new Client({
     intents: [
@@ -48,14 +49,14 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
     try {
-        console.log('Registrando comandos slash globalmente...');
+        logger.info('Registrando comandos slash globalmente...');
         await rest.put(
             Routes.applicationCommands(process.env.APP_ID), // Registrar globalmente
             { body: commands }
         );
-        console.log('Comandos slash registrados exitosamente.');
+        logger.info('Comandos slash registrados exitosamente.');
     } catch (error) {
-        console.error('Error al registrar comandos slash:', error);
+        logger.error('Error al registrar comandos slash:', error);
     }
 })();
 
@@ -85,7 +86,7 @@ async function gatherSearchContext(channel, query, getEmbedding, cosineSimilarit
             similarities.push(similarity);
 
             if(similarity > calculateDynamicThreshold(similarities)){
-                console.log(`Message: ${msg.content} - Similarity: ${similarity} - Author: ${msg.author.displayName}`);
+                logger.info(`Message: ${msg.content} - Similarity: ${similarity} - Author: ${msg.author.displayName}`);
                 searchContext.push({
                     role: 'user',
                     content: `${msg.author.displayName}: ${msg.content}`,
@@ -115,6 +116,7 @@ async function handleMessage(message, analyzeIntent, generateResponse, getEmbedd
 
     try {
         isHandlingMessage = true;
+        const startTime = Date.now();
         const intent = await analyzeIntent(message.content, selectedProvider);
         let response;
         if (selectedProvider === 'crofAI') {
@@ -134,13 +136,13 @@ async function handleMessage(message, analyzeIntent, generateResponse, getEmbedd
                 const intentAnalysis = await analyzeIntent(msg.content);
 
                 if(intentAnalysis.isSearchRequest){
-                    console.log('Se encontró una petición de búsqueda');
+                    logger.info('Se encontró una petición de búsqueda');
                     // Realizar la búsqueda y obtener los resultados
                     const searchResults = await fetchSearchResults(intentAnalysis.keywords.join(' '));
 
                     if(searchResults.length === 0){
                         // Si no se encontró resultados, procesar el mensaje normalmente
-                        console.log('No se encontró resultados');
+                        logger.info('No se encontró resultados');
                         const response = await generateResponse(context, msg.content);
                         await sendLongMessage(msg.channel, response);
                     }else{
@@ -159,9 +161,10 @@ async function handleMessage(message, analyzeIntent, generateResponse, getEmbedd
                 }
             });
         }
-        await sendLongMessage(message.channel, response);
+        const duration = Date.now() - startTime;
+        await sendLongMessage(message.channel, response, duration);
     } catch (error) {
-        console.error('Error al procesar el mensaje:', error);
+        logger.error('Error al procesar el mensaje:', error);
         await sendLongMessage(message.channel, 'Lo siento, hubo un error al procesar tu mensaje.');
     } finally {
         isHandlingMessage = false;
@@ -175,7 +178,7 @@ function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateRespo
     isHandlersSetup = true;
 
     client.once('ready', async () => {
-        console.log(`Logged in as ${client.user.tag}!`);
+        logger.info(`Logged in as ${client.user.tag}!`);
         client.user.setActivity(`${targetChannelName}`, { type: ActivityType.Watching });
     });
 
@@ -187,7 +190,7 @@ function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateRespo
 
 function handleShutdown(){
     client.user.setActivity('Que lastima pero adiós...', { type: ActivityType.Listening });
-    console.log('Cerrando el bot de Discord...');
+    logger.info('Cerrando el bot de Discord...');
     try {
         unloadModel().then(() => {
             client.destroy();
@@ -261,18 +264,18 @@ function splitMessage(content, maxLength = 2000) {
   return chunks;
 }
 
-function extractAndLogThinking(content) {
+function extractAndLogThinking(content, duration) {
   const thinkingMatch = content.match(/<think>([\s\S]*?)<\/think>/);
   if (thinkingMatch) {
-    console.clear();
-    console.log('Thinking:\n' + thinkingMatch[1]);
+    const thinkingText = thinkingMatch[1].trim();
+    logger.info(`Thinking:\n${thinkingText}`, { duration });
     return content.replace(thinkingMatch[0], '').trim();
   }
   return content;
 }
 
-async function sendLongMessage(channel, content) {
-  const cleanedContent = extractAndLogThinking(content);
+async function sendLongMessage(channel, content, duration) {
+  const cleanedContent = extractAndLogThinking(content, duration);
   const chunks = splitMessage(cleanedContent);
   for (const chunk of chunks) {
     await channel.send(chunk);

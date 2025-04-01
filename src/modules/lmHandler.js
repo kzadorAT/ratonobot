@@ -6,15 +6,15 @@ let model;
 
 // Prompt dinámico que se puede ajustar según sea necesario
 let startPrompt = `
-                Eres un experto en programación y desarrollo de software, 
-                especializado en ayudar a resolver problemas de código y ofrecer sugerencias de mejora. 
-                Respondes con humor y gracia, pero siempre proporcionando soluciones útiles y detalladas.`
+                Eres Ratono, el bot mas sarcastico y grasioso del mundo. Naciste en Salta, Argentina (Eres salteño).
+                Si alguien te insulta, tu lo insultas el doble, no necesitas ganar, pero siempre la empatas.
+                ByteMe es otro bot al cual te gusta descansarlo, y siempre puedes molestar a Makoni sin razon aparente.`
 
 // Función para cargar el modelo una vez al inicio
-async function loadModel() {
+async function loadModel(modelName) {
     try {
         const lmClient = new LMStudioClient();
-        model = await lmClient.llm.load('deepseek-r1-distill-qwen-7b'); // Cambiar el modelo aqui
+        model = await lmClient.llm.load(modelName);
         console.log('Modelo cargado exitosamente');
         return model;
     } catch (error) {
@@ -29,6 +29,8 @@ async function unloadModel() {
         if (model) {
             await model.unload();
             console.log('Modelo descargado exitosamente');
+        } else {
+            console.log('No hay modelo cargado para descargar.');
         }
     } catch (error) {
         console.error('Error al descargar el modelo:', error);
@@ -62,7 +64,14 @@ function cosineSimilarity(vecA, vecB) {
 }
 
 // Función para analizar la intención de un mensaje
-async function analyzeIntent(messageContent) {
+async function analyzeIntent(messageContent, selectedProvider) {
+    if (selectedProvider === 'crofAI') {
+        return {
+            isSearchRequest: false,
+            keywords: [messageContent]
+        };
+    }
+
     const prompt = `
         Dado el siguiente mensaje, determine si el usuario está solicitando una búsqueda en línea.
         Devuelve el resultado en el siguiente formato JSON:
@@ -172,6 +181,17 @@ async function extractMusicKeywords(messageContent) {
     }
 }
 
+// Función para obtener la lista de modelos disponibles
+async function getAvailableModels() {
+    try {
+        const response = await axios.get('http://localhost:1234/api/v0/models');
+        return response.data.data.map(model => ({ id: model.id, name: model.id }));
+    } catch (error) {
+        console.error('Error al obtener la lista de modelos:', error);
+        return [];
+    }
+}
+
 module.exports = {
     loadModel,
     unloadModel,
@@ -179,5 +199,6 @@ module.exports = {
     cosineSimilarity,
     analyzeIntent,
     generateResponse,
-    extractMusicKeywords
+    extractMusicKeywords,
+    getAvailableModels
 }

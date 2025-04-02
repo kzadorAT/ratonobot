@@ -6,6 +6,10 @@ import { unloadModel } from './lmHandler.js';
 import { addMessage, processQueue } from './messageQueue.js';
 import { getChannelContext } from './channelContext.js';
 import { fetchSearchResults } from './searchHandler.js';
+import IntentHandler from './intentHandler.js';
+import mcpHandler from './mcp/mcpHandler.js';
+import { promisify } from 'util';
+const sleep = promisify(setTimeout);
 import aiProvider from './aiProvider.js';
 import logger from './logger.js';
 
@@ -120,16 +124,35 @@ async function gatherSearchContext(channel, query, getEmbedding, cosineSimilarit
 
 let isHandlingMessage = false;
 
-async function handleMessage(message, analyzeIntent, generateResponse, getEmbedding, cosineSimilarity, selectedProvider, selectedModel){
+async function handleMessage(message, intentHandler, generateResponse, selectedProvider, selectedModel){
     if (message.author.bot || isHandlingMessage) return;
     if (message.channel.name !== targetChannelName) return;
 
     try {
         isHandlingMessage = true;
         const startTime = Date.now();
-        const intent = await analyzeIntent(message.content, selectedProvider);
+        const intent = await intentHandler.analyze(message.content, selectedProvider);
         let response;
-        if (selectedProvider === 'crofAI') {
+        
+        // Manejar herramientas MCP si se requieren
+        if (intent.requiresMcp) {
+            try {
+                const result = await mcpHandler.executeTool(
+                    intent.suggestedMcpTool.server,
+                    intent.suggestedMcpTool.tool,
+                    intent.mcpArgs || {}
+                );
+
+                response = result.success ? 
+                    `✅ ${result.result || 'Operación exitosa'}` :
+                    `❌ Error: ${result.error || 'Desconocido'}`;
+
+                await sleep(500); // Pequeña pausa para evitar rate limiting
+            } catch (error) {
+                response = `❌ Error al ejecutar herramienta MCP: ${error.message}`;
+                logger.error('Error en herramienta MCP:', error);
+            }
+        } else if (selectedProvider === 'crofAI') {
             const crofAI = aiProvider.getProvider('crofAI');
             const completion = await crofAI.chat.completions.create({
                 model: selectedModel,
@@ -143,7 +166,7 @@ async function handleMessage(message, analyzeIntent, generateResponse, getEmbedd
             addMessage(message);
             processQueue(async (msg) => {
                 const context = getChannelContext(channelId);
-                const intentAnalysis = await analyzeIntent(msg.content);
+                const intentAnalysis = await intentHandler.analyze(msg.content, selectedProvider);
 
                 if(intentAnalysis.isSearchRequest){
                     logger.info('Se encontró una petición de búsqueda');
@@ -187,7 +210,23 @@ function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateRespo
     if (isHandlersSetup) return;
     isHandlersSetup = true;
 
-    client.on('messageCreate', (message) => handleMessage(message, analyzeIntent, generateResponse, getEmbedding, cosineSimilarity, selectedProvider, selectedModel));
+    // Inicializar IntentHandler
+    const intentHandler = new IntentHandler({
+        'LM Studio': { analyzeIntent },
+        'crofAI': { analyzeIntent: (message) => ({ 
+            isSearchRequest: false,
+            keywords: [],
+            requiresMcp: false
+        })}
+    });
+
+    client.on('messageCreate', (message) => handleMessage(
+        message, 
+        intentHandler,
+        generateResponse, 
+        selectedProvider, 
+        selectedModel
+    ));
 
     process.on('SIGINT', handleShutdown); // Ctrl + C en la terminal
     process.on('SIGTERM', handleShutdown); // Señales de cierre del sistema
@@ -290,5 +329,6 @@ async function sendLongMessage(channel, content, duration) {
 export {
     setupDiscordHandlers,
     login,
-    handleMessage
+    handleMessage,
+    gatherSearchContext
 };

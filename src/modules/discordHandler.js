@@ -124,14 +124,28 @@ async function gatherSearchContext(channel, query, getEmbedding, cosineSimilarit
 
 let isHandlingMessage = false;
 
-async function handleMessage(message, intentHandler, generateResponse, selectedProvider, selectedModel){
+async function handleMessage(message, intentHandler, generateResponse, selectedProvider, selectedModel, contextManager){
     if (message.author.bot || isHandlingMessage) return;
     if (message.channel.name !== targetChannelName) return;
 
     try {
         isHandlingMessage = true;
         const startTime = Date.now();
-        const intent = await intentHandler.analyze(message.content, selectedProvider);
+        
+        // Obtener contexto completo
+        const context = await contextManager.getFullContext(
+            message.channel.id,
+            message.author.id,
+            message.id
+        );
+
+        // Analizar intención con contexto
+        const intent = await intentHandler.analyzeWithContext(
+            message.content, 
+            context,
+            selectedProvider
+        );
+        
         let response;
         
         // Manejar herramientas MCP si se requieren
@@ -140,17 +154,29 @@ async function handleMessage(message, intentHandler, generateResponse, selectedP
                 const result = await mcpHandler.executeTool(
                     intent.suggestedMcpTool.server,
                     intent.suggestedMcpTool.tool,
-                    intent.mcpArgs || {}
+                    {
+                        ...intent.mcpArgs,
+                        userContext: context.memory // Pasar contexto de memoria
+                    }
                 );
 
-                response = result.success ? 
-                    `✅ ${result.result || 'Operación exitosa'}` :
-                    `❌ Error: ${result.error || 'Desconocido'}`;
+                // Formatear respuesta con contexto
+                response = result.success 
+                    ? await generateResponse(
+                        result.result,
+                        message.content,
+                        context
+                      )
+                    : `❌ Error: ${result.error || 'Desconocido'}`;
 
                 await sleep(500); // Pequeña pausa para evitar rate limiting
             } catch (error) {
-                response = `❌ Error al ejecutar herramienta MCP: ${error.message}`;
                 logger.error('Error en herramienta MCP:', error);
+                response = await generateResponse(
+                    `Error: ${error.message}`,
+                    message.content,
+                    context
+                );
             }
         } else if (selectedProvider === 'crofAI') {
             const crofAI = aiProvider.getProvider('crofAI');
@@ -168,24 +194,51 @@ async function handleMessage(message, intentHandler, generateResponse, selectedP
                 const context = getChannelContext(channelId);
                 const intentAnalysis = await intentHandler.analyze(msg.content, selectedProvider);
 
-                if(intentAnalysis.isSearchRequest){
+                if(intentAnalysis.requiresMcp && intentAnalysis.suggestedMcpTool) {
+                    logger.info(`IA sugiere herramienta: ${intentAnalysis.suggestedMcpTool}`);
+                    let attempt = 0;
+                    let result;
+                    
+                    while(attempt < 3) { // Máximo 2 reintentos (3 intentos total)
+                        try {
+                            // Extraer nombre base del servidor (sin prefijos/rutas)
+                            const toolParts = intentAnalysis.suggestedMcpTool.split('.');
+                            const baseToolName = toolParts[toolParts.length - 1].replace('_tool', '');
+                            
+                            result = await mcpHandler.executeTool(
+                                baseToolName, 
+                                baseToolName, 
+                                {query: msg.content},
+                                attempt
+                            );
+                            break;
+                        } catch (error) {
+                            attempt++;
+                            if(attempt >= 3 || !error.remainingAttempts) throw error;
+                            
+                            // Proporcionar feedback a la IA para corregir
+                            logger.info(`Reintento ${attempt}: ${error.message}`);
+                            intentAnalysis = await analyzeIntent(
+                                `${msg.content}. ERROR: ${error.message}. ${error.suggestion || ''}`
+                            );
+                        }
+                    }
+
+                    await sendLongMessage(msg.channel, result?.result || 'No se pudo obtener resultados');
+                }
+                else if(intentAnalysis.isSearchRequest){
                     logger.info('Se encontró una petición de búsqueda');
-                    // Realizar la búsqueda y obtener los resultados
                     const searchResults = await fetchSearchResults(intentAnalysis.keywords.join(' '));
 
                     if(searchResults.length === 0){
-                        // Si no se encontró resultados, procesar el mensaje normalmente
                         logger.info('No se encontró resultados');
                         const response = await generateResponse(context, msg.content);
                         await sendLongMessage(msg.channel, response);
                     }else{
-                        // Formatear los resultados para el mensaje de respuesta
                         let searchReply = 'Aquí tienes los resultados de búsqueda:\n';
                         searchResults.slice(0, 3).forEach((result) => {
                             searchReply += `**${result.title}**\n${result.description}\n${result.link}\n\n`;
                         });
-
-                        // Enviar los resultados de la búsqueda
                         await sendLongMessage(msg.channel, searchReply);
                     }
                 }else{
@@ -206,9 +259,22 @@ async function handleMessage(message, intentHandler, generateResponse, selectedP
 
 let isHandlersSetup = false;
 
-function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateResponse, getEmbedding, cosineSimilarity, loadModel, selectedProvider, selectedModel }){
+function setupDiscordHandlers({ 
+    analyzeIntent, 
+    fetchSearchResults, 
+    generateResponse, 
+    getEmbedding, 
+    cosineSimilarity, 
+    loadModel, 
+    selectedProvider, 
+    selectedModel,
+    memoryService 
+}){
     if (isHandlersSetup) return;
     isHandlersSetup = true;
+
+    // Inicializar ContextManager
+    const contextManager = new (require('./context/contextManager').default)(client, memoryService);
 
     // Inicializar IntentHandler
     const intentHandler = new IntentHandler({
@@ -225,7 +291,8 @@ function setupDiscordHandlers({ analyzeIntent, fetchSearchResults, generateRespo
         intentHandler,
         generateResponse, 
         selectedProvider, 
-        selectedModel
+        selectedModel,
+        contextManager
     ));
 
     process.on('SIGINT', handleShutdown); // Ctrl + C en la terminal

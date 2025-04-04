@@ -5,7 +5,9 @@
   "description": "Es solo un simple bot, antes no pude hacerlo, pero ahora vere que si.,",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "start": "node ./src/index.js"
   },
   "repository": {
@@ -23,6 +25,7 @@
     "@discordjs/voice": "^0.17.0",
     "@inquirer/prompts": "^7.4.0",
     "@lmstudio/sdk": "^1.0.1",
+    "@modelcontextprotocol/sdk": "^1.8.0",
     "axios": "^1.7.2",
     "chalk": "^4.1.2",
     "cheerio": "^1.0.0-rc.12",
@@ -33,5 +36,12 @@
     "libsodium-wrappers": "^0.7.14",
     "openai": "^5.0.0-alpha.0",
     "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.10",
+    "@babel/preset-env": "^7.26.9",
+    "@types/jest": "^29.5.14",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0"
   }
 }

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import logger from './logger.js';
-import aiProvider from './aiProvider.js';
+import logger from '../../services/logger.js';
+import aiProvider from '../../services/aiProvider.js';
 
 class IntentHandler {
     constructor(providers) {

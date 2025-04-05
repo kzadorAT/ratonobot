@@ -1,6 +1,6 @@
 // channelContext.js
 
-import logger from './logger.js';
+import logger from '../../services/logger.js';
 
 const channelContexts = {};
 const contextSize = 5;

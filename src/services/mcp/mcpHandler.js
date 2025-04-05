@@ -15,7 +15,7 @@ class MCPHandler {
 
     loadConfig() {
         try {
-            const configPath = path.join(process.cwd(), 'src/modules/mcp/mcp_config.json');
+            const configPath = path.join(process.cwd(), 'src/services/mcp/mcp_config.json');
             if (!fs.existsSync(configPath)) {
                 logger.warn('No se encontró archivo de configuración MCP');
                 return;

@@ -1,34 +1,13 @@
-import express from 'express';
-import { setupDiscordHandlers, login } from './modules/discordHandler.js';
-import {
-    loadModel,
-    getEmbedding,
-    cosineSimilarity,
-    analyzeIntent,
-    generateResponse,
-    extractMusicKeywords,
-    getAvailableModels
-} from './modules/lmHandler.js';
-import readline from 'readline';
-import aiProvider from './modules/aiProvider.js';
-import logger from './modules/logger.js';
-import 'dotenv/config';
 import { select } from '@inquirer/prompts';
+import readline from 'readline';
+import aiProvider from '../services/aiProvider.js';
+import logger from '../services/logger.js';
+import {
+  loadModel,
+  getAvailableModels
+} from '../services/lmHandler.js';
 
-const app = express();
-app.use(express.json());
-
-app.post('/select-ai', (req, res) => {
-  const { aiName } = req.body;
-  const ai = aiProvider.getProvider(aiName);
-  if (ai) {
-    res.json({ success: true, ai });
-  } else {
-    res.status(404).json({ success: false, message: 'AI not found' });
-  }
-});
-
-async function selectProvider() {
+export async function selectProvider() {
   return await select({
     message: 'Seleccione un proveedor',
     choices: [
@@ -38,7 +17,7 @@ async function selectProvider() {
   });
 }
 
-async function selectModel() {
+export async function selectModel() {
   try {
     const models = await getAvailableModels();
     if (models.length === 0) {
@@ -82,7 +61,7 @@ async function selectModel() {
   }
 }
 
-async function selectCrofAIModel() {
+export async function selectCrofAIModel() {
   const models = ['llama3-8b', 'llama3.1-8b', 'llama3.3-70b', 'llama3.2-1b', 'llama3-70b', 'llama3.1-405b', 'llama3.1-tulu3-405b', 'deepseek-r1', 'deepseek-v3', 'deepseek-v3-0324', 'deepseek-r1-distill-llama-70b', 'deepseek-r1-distill-qwen-32b', 'qwen-qwq-32b', 'gemma-3-27b-it'];
   return await select({
     message: 'Seleccione un modelo',
@@ -90,7 +69,7 @@ async function selectCrofAIModel() {
   });
 }
 
-async function setupAI() {
+export async function setupAI() {
   const selectedProvider = await selectProvider();
   let selectedModel;
   if (selectedProvider === 'LM Studio') {
@@ -103,30 +82,3 @@ async function setupAI() {
 
   return { selectedProvider, selectedModel };
 }
-
-async function main() {
-  const { selectedProvider, selectedModel } = await setupAI();
-
-  // Configurar la IA primero
-  await setupDiscordHandlers({
-    analyzeIntent,
-    generateResponse,
-    getEmbedding,
-    cosineSimilarity,
-    extractMusicKeywords,
-    loadModel,
-    selectedProvider,
-    selectedModel
-  });
-
-  // Conectar a Discord después de que la IA esté configurada
-  login(process.env.DISCORD_TOKEN);
-
-  // Iniciar el servidor Express después de que todo esté listo
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
-    logger.info(`Server listening on port ${port}`);
-  });
-}
-
-main();

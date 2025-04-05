@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Es solo un simple bot, antes no pude hacerlo, pero ahora vere que si.,",
-  "main": "index.js",
+  "main": "src/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ./src/index.js"
+    "start": "node ./src/main.js"
   },
   "repository": {
     "type": "git",

@@ -1,6 +1,7 @@
 import client from './client.js';
 import { setupEventHandlers } from './handlers/eventHandlers.js';
 import { handleMessage } from './handlers/messageHandler.js';
+import { ActivityType } from 'discord.js';
 import 'dotenv/config';
 import logger from '../services/logger.js';
 
@@ -16,7 +17,12 @@ export default async function startBot(provider) {
   );
 
   client.login(process.env.DISCORD_TOKEN);
-  logger.info('Bot de Discord iniciado');
+
+  client.once('ready', () => {
+    const status = `${aiProvider.providerName}/${aiProvider.modelName}`;
+    client.user.setActivity(status, { type: ActivityType.Custom });
+    logger.info(`Bot de Discord iniciado con IA: ${status}`);
+  });
 }
 
 async function shutdown() {

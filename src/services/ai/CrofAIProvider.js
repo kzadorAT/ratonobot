@@ -22,6 +22,7 @@ const CROFAI_MODELS = [
 export default class CrofAIProvider extends AIProvider {
   constructor(defaultModel = 'llama3-70b') {
     super();
+    this.providerName = 'CrofAI';
     this.modelName = defaultModel;
     this.client = aiProvider.getProvider('crofAI');
   }

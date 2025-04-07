@@ -23,6 +23,7 @@ async function waitForServer(timeoutMs = 10000, intervalMs = 500) {
 export default class LMStudioProvider extends AIProvider {
   constructor(defaultModel = null) {
     super();
+    this.providerName = 'LM Studio';
     this.modelName = defaultModel;
   }
 

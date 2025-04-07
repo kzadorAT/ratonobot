@@ -1,14 +1,13 @@
 import client from './client.js';
 import { setupEventHandlers } from './handlers/eventHandlers.js';
 import { handleMessage } from './handlers/messageHandler.js';
-import { selectProviderAndModel } from '../menu.js';
 import 'dotenv/config';
 import logger from '../services/logger.js';
 
 let aiProvider = null;
 
-export default async function startBot() {
-  aiProvider = await selectProviderAndModel();
+export default async function startBot(provider) {
+  aiProvider = provider;
 
   setupEventHandlers(client);
 

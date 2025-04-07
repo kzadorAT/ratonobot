@@ -8,10 +8,10 @@ class MCPHandler {
   constructor() {
     this.servers = {};
     this.clients = {};
-    this.loadConfig();
+    // No llamar a loadConfig automáticamente
   }
 
-  loadConfig() {
+  async loadConfig() {
     try {
       const configPath = path.join(process.cwd(), 'src/services/mcp/mcp_config.json');
       if (!fs.existsSync(configPath)) {
@@ -25,12 +25,22 @@ class MCPHandler {
       const serverCount = Object.keys(this.servers).length;
       logger.info(`Configuración MCP cargada - ${serverCount} servidor(es) disponible(s):`);
 
-      Object.entries(this.servers).forEach(([name, cfg]) => {
+      for (const [name, cfg] of Object.entries(this.servers)) {
         logger.info(`- ${name}: ${cfg.command} ${cfg.args.join(' ')}`);
         if (cfg.env && Object.keys(cfg.env).length > 0) {
           logger.info('  Variables de entorno:', cfg.env);
         }
-      });
+
+        try {
+          const client = await this.getClient(name);
+          const { tools } = await client.listTools();
+          cfg.tools = tools || [];
+          logger.info(`  Herramientas cargadas: ${tools.map(t => t.name).join(', ')}`);
+        } catch (error) {
+          logger.warn(`  No se pudieron cargar herramientas para ${name}: ${error.message}`);
+          cfg.tools = [];
+        }
+      }
     } catch (error) {
       logger.error('Error al cargar configuración MCP:', error);
     }
@@ -97,4 +107,5 @@ class MCPHandler {
   }
 }
 
-export default new MCPHandler();
+const mcpHandler = new MCPHandler();
+export default mcpHandler;

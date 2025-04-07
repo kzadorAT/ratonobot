@@ -23,6 +23,8 @@ Mensaje del usuario:
 Herramientas disponibles:
 ${toolsList || 'Ninguna herramienta registrada.'}
 
+IMPORTANTE: Usa exactamente los nombres de MCP y herramientas listados arriba, sin modificarlos.
+
 ¿Debo usar alguna herramienta? Responde en JSON con el siguiente formato:
 
 {

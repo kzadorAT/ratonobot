@@ -1,5 +1,9 @@
 import mcpHandler from '../../services/mcp/mcpHandler.js';
 import { buildMcpDecisionPrompt } from '../../services/mcp/mcpPromptBuilder.js';
+import { buildContext } from '../utils/contextBuilder.js';
+import { getOrCreateUserEntity } from '../../services/memoryKG.js';
+import { buildPrompt } from '../utils/promptBuilder.js';
+import { summarizeContext } from '../utils/contextSummarizer.js';
 import logger from '../../services/logger.js';
 
 const targetChannelName = 'testing-bot';
@@ -16,6 +20,36 @@ async function handleMessage(message, aiProvider) {
 
     logger.info(`Mensaje recibido: "${message.content}"`);
 
+    // Obtener contexto Discord
+    const context = await buildContext(message.channel, message.author, message);
+
+    // Obtener memoria persistente
+    const memoryEntity = await getOrCreateUserEntity(message.author.id, message.author.username);
+
+    // Construir prompt enriquecido
+    const enrichedPrompt = buildPrompt(context, memoryEntity, message.author.username);
+
+    logger.info('Prompt enriquecido para IA:\n' + enrichedPrompt);
+
+    // Resumir contexto
+    const summary = await summarizeContext(aiProvider, enrichedPrompt);
+
+    logger.info('Resumen del contexto generado por IA:\n' + summary);
+
+    // Construir prompt final con resumen + mensaje actual
+    const finalPrompt = `
+Contexto relevante:
+${summary}
+
+Mensaje actual del usuario:
+"${message.content}"
+
+Solo responde a la última pregunta o comentario, usando el contexto si es útil.
+`;
+
+    logger.info('Prompt final para IA:\n' + finalPrompt);
+
+    // Decidir si usar MCP
     const decisionPrompt = await buildMcpDecisionPrompt(message.content);
     logger.info('Prompt para IA (decisión MCP):\n' + decisionPrompt);
 
@@ -46,7 +80,23 @@ async function handleMessage(message, aiProvider) {
           decision.args || {}
         );
 
-        const mcpResult = result.success ? (result.result || '') : `Error: ${result.error || 'desconocido'}`;
+        let mcpResult;
+        if (!result.success) {
+          mcpResult = `Error: ${result.error || 'desconocido'}`;
+        } else if (typeof result.result === 'object') {
+          try {
+            mcpResult = JSON.stringify(result.result, null, 2);
+          } catch {
+            mcpResult = String(result.result);
+          }
+        } else {
+          mcpResult = result.result || '';
+        }
+
+        // Limitar longitud del resultado para evitar errores Discord
+        if (typeof mcpResult === 'string' && mcpResult.length > 1500) {
+          mcpResult = mcpResult.slice(0, 1500) + '...';
+        }
 
         logger.info('Resultado del MCP:\n' + mcpResult);
 
@@ -55,15 +105,21 @@ async function handleMessage(message, aiProvider) {
         } else {
           response = mcpResult;
         }
+
+        // Limitar longitud de la respuesta final también
+        if (typeof response === 'string' && response.length > 1800) {
+          response = response.slice(0, 1800) + '...';
+        }
+
         logger.info('Respuesta final con MCP integrada:\n' + response);
       } catch (error) {
         response = `❌ Error al ejecutar herramienta MCP: ${error.message}`;
         logger.error('Error en herramienta MCP:', error);
       }
     } else {
-      logger.info('La IA decidió NO usar un MCP, generando respuesta normal');
+      logger.info('La IA decidió NO usar un MCP, generando respuesta con resumen y mensaje actual');
       response = await aiProvider.generateResponse([
-        { role: 'user', content: message.content }
+        { role: 'user', content: finalPrompt }
       ]);
       logger.info('Respuesta final sin MCP:\n' + response);
     }
@@ -107,7 +163,13 @@ async function sendLongMessage(channel, content, duration) {
   const cleanedContent = extractAndLogThinking(content, duration);
   const chunks = splitMessage(cleanedContent);
   for (const chunk of chunks) {
-    await channel.send(chunk);
+    if (chunk.length === 0) continue;
+    try {
+      await channel.send(chunk);
+      await new Promise(res => setTimeout(res, 500)); // pequeña pausa para evitar rate limit
+    } catch (error) {
+      console.warn('Error enviando fragmento Discord:', error.message);
+    }
   }
 }
 

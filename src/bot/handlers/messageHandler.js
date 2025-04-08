@@ -5,6 +5,7 @@ import { getOrCreateUserEntity } from '../../services/memoryKG.js';
 import { buildPrompt } from '../utils/promptBuilder.js';
 import { summarizeContext } from '../utils/contextSummarizer.js';
 import logger from '../../services/logger.js';
+import { answerWithReasoning } from '../../services/mcp/index.js';
 
 const targetChannelName = 'testing-bot';
 
@@ -67,55 +68,13 @@ Solo responde a la última pregunta o comentario, usando el contexto si es útil
       decision = { useMcp: false };
     }
 
+
     let response;
 
     if (decision.useMcp) {
-      logger.info(`La IA decidió usar MCP: ${decision.mcpName}.${decision.toolName}`);
-      logger.info(`Argumentos para MCP: ${JSON.stringify(decision.args)}`);
-
-      try {
-        const result = await mcpHandler.executeTool(
-          decision.mcpName,
-          decision.toolName,
-          decision.args || {}
-        );
-
-        let mcpResult;
-        if (!result.success) {
-          mcpResult = `Error: ${result.error || 'desconocido'}`;
-        } else if (typeof result.result === 'object') {
-          try {
-            mcpResult = JSON.stringify(result.result, null, 2);
-          } catch {
-            mcpResult = String(result.result);
-          }
-        } else {
-          mcpResult = result.result || '';
-        }
-
-        // Limitar longitud del resultado para evitar errores Discord
-        if (typeof mcpResult === 'string' && mcpResult.length > 1500) {
-          mcpResult = mcpResult.slice(0, 1500) + '...';
-        }
-
-        logger.info('Resultado del MCP:\n' + mcpResult);
-
-        if (decision.responseTemplate) {
-          response = decision.responseTemplate.replace('{{mcpResult}}', mcpResult);
-        } else {
-          response = mcpResult;
-        }
-
-        // Limitar longitud de la respuesta final también
-        if (typeof response === 'string' && response.length > 1800) {
-          response = response.slice(0, 1800) + '...';
-        }
-
-        logger.info('Respuesta final con MCP integrada:\n' + response);
-      } catch (error) {
-        response = `❌ Error al ejecutar herramienta MCP: ${error.message}`;
-        logger.error('Error en herramienta MCP:', error);
-      }
+      logger.info('La IA decidió usar MCP, iniciando razonador iterativo');
+      response = await answerWithReasoning(message.content);
+      logger.info('Respuesta final del razonador:\n' + response);
     } else {
       logger.info('La IA decidió NO usar un MCP, generando respuesta con resumen y mensaje actual');
       response = await aiProvider.generateResponse([

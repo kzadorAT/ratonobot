@@ -16,7 +16,8 @@ const CROFAI_MODELS = [
   'deepseek-r1-distill-llama-70b',
   'deepseek-r1-distill-qwen-32b',
   'qwen-qwq-32b',
-  'gemma-3-27b-it'
+  'gemma-3-27b-it',
+  'llama-4-scout-131k'
 ];
 
 export default class CrofAIProvider extends AIProvider {

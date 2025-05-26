@@ -2,22 +2,45 @@ import aiManager from './services/ai/AIManager.js';
 import { select } from '@inquirer/prompts';
 
 export async function selectProviderAndModel() {
+  const providers = aiManager.listProviders();
+  
   const providerName = await select({
     message: 'Seleccione un proveedor de IA:',
-    choices: aiManager.listProviders().map(name => ({
+    choices: providers.map(name => ({
       name,
       value: name
     }))
   });
 
   const provider = aiManager.getProvider(providerName);
-  const models = await provider.listModels();
+  console.log(`Obteniendo modelos disponibles para ${providerName}...`);
+  
+  let models = [];
+  try {
+    models = await provider.listModels();
+    console.log(`Modelos disponibles: ${models.length}`);
+  } catch (error) {
+    console.error('Error al obtener modelos:', error.message);
+    throw new Error(`No se pudieron cargar los modelos: ${error.message}`);
+  }
+
+  if (!models || models.length === 0) {
+    console.warn('No se encontraron modelos disponibles. Usando modelo predeterminado.');
+    return provider; // Retornar el proveedor con el modelo predeterminado
+  }
 
   const modelId = await select({
     message: 'Seleccione un modelo:',
-    choices: models.map(m => ({
-      name: m.description ? `${m.id} - ${m.description}` : m.id,
-      value: m.id
+    pageSize: 10,
+    searchable: true,
+    choices: models.map(model => ({
+      name: model.name,
+      value: model.id,
+      description: [
+        `Contexto: ${model.details.contextLength} tokens`,
+        `Precio: ${model.details.pricing}`,
+        `Quant: ${model.details.quantization}`
+      ].join(' | ')
     }))
   });
 

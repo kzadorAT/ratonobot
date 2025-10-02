@@ -1,4 +1,5 @@
 import mcpHandler from './mcp/mcpHandler.js';
+import logger from './logger.js';
 
 const MEMORY_SERVER = 'memory';
 
@@ -35,7 +36,7 @@ export async function getOrCreateUserEntity(userId, userName) {
     return createdResult.result?.entities?.[0] || null;
 
   } catch (error) {
-    console.warn('Error en getOrCreateUserEntity:', error.message);
+    logger.warn('Error en getOrCreateUserEntity:', error.message);
     return null;
   }
 }
@@ -58,6 +59,6 @@ export async function addUserObservations(userId, observations) {
       ]
     });
   } catch (error) {
-    console.warn('Error agregando observaciones a usuario:', error.message);
+    logger.warn('Error agregando observaciones a usuario:', error.message);
   }
 }

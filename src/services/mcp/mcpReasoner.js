@@ -2,6 +2,7 @@
  * MCP Reasoner: ciclo plan-ejecuta-evalúa-decide-iterar
  * para coordinar llamadas a MCPs y memorias, combinando resultados.
  */
+import logger from '../logger.js';
 
 export default class McpReasoner {
   constructor(aiProvider, mcpHandler, memoryHandler) {
@@ -18,7 +19,7 @@ export default class McpReasoner {
 
     while (iteration < this.maxIterations) {
       iteration++;
-      console.log(`[MCP Reasoner] Iteración ${iteration}`);
+      logger.info(`[MCP Reasoner] Iteración ${iteration}`);
 
       // 1. Planificar: decidir qué hacer a continuación
       const planPrompt = `
@@ -42,11 +43,11 @@ Devuelve un JSON con:
       try {
         plan = JSON.parse(planResponse);
       } catch {
-        console.warn("[MCP Reasoner] Error parseando plan, terminando.");
+        logger.warn("[MCP Reasoner] Error parseando plan, terminando.");
         break;
       }
 
-      console.log("[MCP Reasoner] Plan:", plan);
+      logger.info("[MCP Reasoner] Plan:", plan);
 
       if (plan.suficiente) {
         // 2. Formular respuesta final
@@ -67,7 +68,7 @@ Formula una respuesta final clara y completa para el usuario.
         const memoryResult = await this.memoryHandler.query(plan.args);
         context.push({ type: "memory", args: plan.args, result: memoryResult });
       } else {
-        console.log("[MCP Reasoner] Sin acción, terminando.");
+        logger.info("[MCP Reasoner] Sin acción, terminando.");
         break;
       }
     }

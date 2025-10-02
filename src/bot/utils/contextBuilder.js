@@ -6,6 +6,8 @@
  * @param {Object} config - Configuración de cantidad de mensajes
  * @returns {Promise<Object>} contexto con fragmentos
  */
+import logger from '../../services/logger.js';
+
 export async function buildContext(channel, user, currentMessage, config = {
   channelMessages: 5,
   userMessages: 3,
@@ -44,7 +46,7 @@ export async function buildContext(channel, user, currentMessage, config = {
       .slice(-config.quotedMentions);
 
   } catch (error) {
-    console.warn('Error construyendo contexto Discord:', error.message);
+    logger.warn('Error construyendo contexto Discord:', error.message);
   }
 
   return context;

@@ -20,7 +20,7 @@ Devuelve un resumen breve y estructurado, sin responder preguntas, solo contexto
     ]);
     return summary.trim();
   } catch (error) {
-    console.warn('Error resumiendo contexto:', error.message);
+    logger.warn('Error resumiendo contexto:', error.message);
     return '';
   }
 }

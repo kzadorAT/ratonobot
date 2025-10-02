@@ -127,7 +127,7 @@ async function sendLongMessage(channel, content, duration) {
       await channel.send(chunk);
       await new Promise(res => setTimeout(res, 500)); // pequeña pausa para evitar rate limit
     } catch (error) {
-      console.warn('Error enviando fragmento Discord:', error.message);
+      logger.warn('Error enviando fragmento Discord:', error.message);
     }
   }
 }

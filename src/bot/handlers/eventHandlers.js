@@ -37,7 +37,7 @@ export function setupEventHandlers(client) {
       detectBots = !detectBots;
       const message = `Detección de bots ${detectBots ? 'activada' : 'desactivada'}.`;
       logger.info(message);
-      console.log(message);
+      logger.info(message);
       await interaction.reply(message);
     }
   });

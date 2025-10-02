@@ -1,5 +1,6 @@
 import aiManager from './services/ai/AIManager.js';
 import { select } from '@inquirer/prompts';
+import logger from './services/logger.js';
 
 export async function selectProviderAndModel() {
   const providers = aiManager.listProviders();
@@ -13,19 +14,19 @@ export async function selectProviderAndModel() {
   });
 
   const provider = aiManager.getProvider(providerName);
-  console.log(`Obteniendo modelos disponibles para ${providerName}...`);
+  logger.info(`Obteniendo modelos disponibles para ${providerName}...`);
   
   let models = [];
   try {
     models = await provider.listModels();
-    console.log(`Modelos disponibles: ${models.length}`);
+    logger.info(`Modelos disponibles: ${models.length}`);
   } catch (error) {
-    console.error('Error al obtener modelos:', error.message);
+    logger.error('Error al obtener modelos:', error.message);
     throw new Error(`No se pudieron cargar los modelos: ${error.message}`);
   }
 
   if (!models || models.length === 0) {
-    console.warn('No se encontraron modelos disponibles. Usando modelo predeterminado.');
+    logger.warn('No se encontraron modelos disponibles. Usando modelo predeterminado.');
     return provider; // Retornar el proveedor con el modelo predeterminado
   }
 

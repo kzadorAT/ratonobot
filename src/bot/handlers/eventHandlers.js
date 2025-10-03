@@ -14,7 +14,7 @@ let detectBots = false;
 export function setupEventHandlers(client) {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  client.once('ready', async () => {
+  client.once('clientReady', async () => {
     logger.info(`Logged in as ${client.user.tag}!`);
     client.user.setActivity('testing-bot', { type: ActivityType.Watching });
 

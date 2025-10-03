@@ -27,6 +27,11 @@ export default class LMStudioProvider extends AIProvider {
     this.modelName = defaultModel;
   }
 
+  formatContextLength(tokens) {
+    if (tokens >= 1000) return `${tokens / 1000}K`;
+    return tokens.toString();
+  }
+
   async generateResponse(messages, options = {}) {
     if (!this.modelName) {
       throw new Error('No hay modelo LM Studio seleccionado');
@@ -59,7 +64,11 @@ export default class LMStudioProvider extends AIProvider {
         .filter(m => m.type === 'llm')
         .map(m => ({
           id: m.id,
-          description: `${m.publisher} (${m.state})`
+          name: m.name || m.id,
+          description: `${m.publisher || 'Unknown'} (${m.state})`,
+          details: {
+            contextLength: m.context_length ? this.formatContextLength(m.context_length) : 'Unknown'
+          }
         }));
     } catch (error) {
       logger.warn('LM Studio no responde, intentando iniciar el servidor...');
@@ -75,7 +84,11 @@ export default class LMStudioProvider extends AIProvider {
           .filter(m => m.type === 'llm')
           .map(m => ({
             id: m.id,
-            description: `${m.publisher} (${m.state})`
+            name: m.name || m.id,
+            description: `${m.publisher || 'Unknown'} (${m.state})`,
+            details: {
+              contextLength: m.context_length ? this.formatContextLength(m.context_length) : 'Unknown'
+            }
           }));
       } catch (startError) {
         logger.error('Error iniciando LM Studio:', startError.message);
@@ -86,6 +99,18 @@ export default class LMStudioProvider extends AIProvider {
 
   async selectModel(modelId) {
     this.modelName = modelId;
+  }
+
+  async getMaxContextLength(modelId) {
+    const models = await this.listModels();
+    const model = models.find(m => m.id === modelId);
+    if (!model) {
+      logger.warn(`Modelo ${modelId} no encontrado en LM Studio`);
+      return 'Unknown';
+    }
+    const maxContext = model.details.contextLength;
+    logger.info(`Max context length para modelo ${modelId} en LM Studio: ${maxContext}`);
+    return maxContext;
   }
 
   async shutdown() {

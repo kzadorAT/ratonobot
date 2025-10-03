@@ -6,6 +6,9 @@ import { buildPrompt } from '../utils/promptBuilder.js';
 import { summarizeContext } from '../utils/contextSummarizer.js';
 import logger from '../../services/logger.js';
 import { answerWithReasoning } from '../../services/mcp/index.js';
+import TokenCounter from '../../services/tokenCounter.js';
+import aiManager from '../../services/ai/AIManager.js';
+import config from '../../config.js';
 
 const targetChannelName = 'testing-bot';
 
@@ -62,9 +65,27 @@ Mensaje actual del usuario:
 "${message.content}"
 
 Solo responde a la última pregunta o comentario, usando el contexto si es útil.
-`;
+    `;
 
     logger.info('Prompt final para IA:\n' + finalPrompt);
+
+    // Token counting for final prompt
+    let promptTokens = 0;
+    let maxTokens = 'Unknown';
+    try {
+      const tokenCounter = new TokenCounter(aiProvider.modelName);
+      promptTokens = tokenCounter.countPromptTokens(finalPrompt);
+      logger.info(`Prompt token count: ${promptTokens}`);
+      maxTokens = aiManager.getMaxContextLength(aiProvider.modelName);
+      if (maxTokens !== 'Unknown') {
+        const maxNum = parseInt(maxTokens.replace(/K$/, '000').replace(/M$/, '000000') || 0);
+        if (promptTokens > maxNum) {
+          logger.warn(`Prompt token count ${promptTokens} exceeds model's max context length ${maxTokens}`);
+        }
+      }
+    } catch (error) {
+      logger.warn('Error in token counting for prompt:', error.message);
+    }
 
     // Decidir si usar MCP
     const decisionPrompt = await buildMcpDecisionPrompt(message.content);
@@ -91,12 +112,31 @@ Solo responde a la última pregunta o comentario, usando el contexto si es útil
       logger.info('La IA decidió usar MCP, iniciando razonador iterativo');
       response = await answerWithReasoning(message.content);
       logger.info('Respuesta final del razonador:\n' + response);
+      // For MCP path, token counting is not integrated yet (per scope limits)
+      await sendLongMessage(message.channel, response, startTime);
     } else {
       logger.info('La IA decidió NO usar un MCP, generando respuesta con resumen y mensaje actual');
       response = await aiProvider.generateResponse([
         { role: 'user', content: finalPrompt }
       ]);
       logger.info('Respuesta final sin MCP:\n' + response);
+
+      // Token counting for response in non-MCP path
+      let responseTokens = 0;
+      let totalTokens = 0;
+      try {
+        const tokenCounter = new TokenCounter(aiProvider.modelName);
+        responseTokens = tokenCounter.countTokens(response);
+        logger.info(`Response token count: ${responseTokens}`);
+        totalTokens = promptTokens + responseTokens;
+        logger.info(`Total tokens used: ${totalTokens}`);
+      } catch (error) {
+        logger.warn('Error in token counting for response:', error.message);
+      }
+
+      const duration = Date.now() - startTime;
+      await sendLongMessage(message.channel, response, duration, { promptTokens, responseTokens, totalTokens });
+      return; // Early return for non-MCP path
     }
 
     const duration = Date.now() - startTime;
@@ -134,8 +174,17 @@ function extractAndLogThinking(content, duration) {
   return content;
 }
 
-async function sendLongMessage(channel, content, duration) {
-  const cleanedContent = extractAndLogThinking(content, duration);
+async function sendLongMessage(channel, content, durationOrStartTime, tokenInfo = null) {
+  let duration;
+  if (typeof durationOrStartTime === 'number') {
+    duration = durationOrStartTime;
+  } else {
+    duration = Date.now() - durationOrStartTime;
+  }
+  let cleanedContent = extractAndLogThinking(content, duration);
+  if (tokenInfo && config.showTokenCount) {
+    cleanedContent += `\n\nTokens: Prompt: ${tokenInfo.promptTokens}, Response: ${tokenInfo.responseTokens}, Total: ${tokenInfo.totalTokens}`;
+  }
   const chunks = splitMessage(cleanedContent);
   for (const chunk of chunks) {
     if (chunk.length === 0) continue;

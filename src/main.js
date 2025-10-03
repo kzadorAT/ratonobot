@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import startServer from './server/index.js';
 import { client as discordClient, setSelectedGuildAndChannel, startBot } from './bot/index.js';
 import mcpHandler from './services/mcp/mcpHandler.js';
+import { initReasoner } from './services/mcp/index.js';
 import { selectProviderAndModel, selectServer, selectChannel } from './menu.js';
 import logger from './services/logger.js';
 
@@ -11,6 +13,9 @@ async function main() {
 
     logger.info('Seleccione el proveedor y modelo de IA...');
     const aiProvider = await selectProviderAndModel();
+
+    logger.info('Inicializando razonador MCP...');
+    initReasoner(aiProvider);
 
     logger.info('Iniciando servidor HTTP...');
     await startServer();

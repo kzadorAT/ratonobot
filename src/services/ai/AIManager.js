@@ -5,7 +5,25 @@ import logger from '../logger.js';
 class AIManager {
   constructor() {
     this.providers = {};
+    this.maxContextLengths = {};
     logger.info('Inicializando AIManager');
+  }
+
+  async loadContextLengths(providerName) {
+    try {
+      const provider = this.getProvider(providerName);
+      const models = await provider.listModels();
+      models.forEach(model => {
+        this.maxContextLengths[model.id] = model.details.contextLength;
+      });
+      logger.info(`Context lengths loaded for ${providerName}:`, this.maxContextLengths);
+    } catch (error) {
+      logger.error(`Error loading context lengths for ${providerName}:`, error);
+    }
+  }
+
+  getMaxContextLength(modelId) {
+    return this.maxContextLengths[modelId] || 'Unknown';
   }
 
   registerProvider(name, provider) {
@@ -37,6 +55,12 @@ try {
   aiManager.registerProvider('CrofAI', new CrofAIProvider());
   aiManager.registerProvider('LMStudio', new LMStudioProvider());
   logger.info('Proveedores de IA registrados exitosamente');
+
+  // Load max context lengths during initialization
+  logger.info('Cargando longitudes de contexto máximas para los proveedores...');
+  await aiManager.loadContextLengths('CrofAI');
+  await aiManager.loadContextLengths('LMStudio');
+  logger.info('Longitudes de contexto cargadas exitosamente');
 } catch (error) {
   logger.error('Error al registrar proveedores de IA:', error);
   throw error;

@@ -15,6 +15,10 @@ export default class AIProvider {
     throw new Error('selectModel() debe ser implementado por la subclase');
   }
 
+  async getMaxContextLength(modelId) {
+    throw new Error('getMaxContextLength() debe ser implementado por la subclase');
+  }
+
   /**
    * Libera recursos y cierra conexiones del proveedor IA.
    * @returns {Promise<void>}

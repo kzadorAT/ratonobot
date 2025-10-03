@@ -1,7 +1,7 @@
-import mcpHandler from './mcp/mcpHandler.js';
 import logger from './logger.js';
 
-const MEMORY_SERVER = 'memory';
+// Simple in-memory storage for user entities
+const memoryStore = new Map();
 
 /**
  * Busca o crea una entidad para un usuario.
@@ -13,27 +13,19 @@ export async function getOrCreateUserEntity(userId, userName) {
   const entityName = `user_${userId}`;
 
   try {
-    const searchResult = await mcpHandler.executeTool(MEMORY_SERVER, 'search_nodes', { query: entityName });
-    const matches = searchResult.result?.entities || [];
-
-    if (matches.length > 0) {
-      return matches[0];
+    if (memoryStore.has(entityName)) {
+      return memoryStore.get(entityName);
     }
 
     // Crear entidad si no existe
-    await mcpHandler.executeTool(MEMORY_SERVER, 'create_entities', {
-      entities: [
-        {
-          name: entityName,
-          entityType: 'person',
-          observations: [`username: ${userName}`]
-        }
-      ]
-    });
+    const entity = {
+      name: entityName,
+      entityType: 'person',
+      observations: [`username: ${userName}`]
+    };
 
-    // Volver a buscar para obtener la entidad creada
-    const createdResult = await mcpHandler.executeTool(MEMORY_SERVER, 'search_nodes', { query: entityName });
-    return createdResult.result?.entities?.[0] || null;
+    memoryStore.set(entityName, entity);
+    return entity;
 
   } catch (error) {
     logger.warn('Error en getOrCreateUserEntity:', error.message);
@@ -50,14 +42,12 @@ export async function addUserObservations(userId, observations) {
   const entityName = `user_${userId}`;
 
   try {
-    await mcpHandler.executeTool(MEMORY_SERVER, 'add_observations', {
-      observations: [
-        {
-          entityName,
-          contents: observations
-        }
-      ]
-    });
+    const entity = memoryStore.get(entityName);
+    if (entity) {
+      entity.observations.push(...observations);
+    } else {
+      logger.warn('Entity not found for user:', userId);
+    }
   } catch (error) {
     logger.warn('Error agregando observaciones a usuario:', error.message);
   }

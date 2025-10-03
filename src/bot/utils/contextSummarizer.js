@@ -1,3 +1,5 @@
+import logger from '../../services/logger.js';
+
 /**
  * Pide a la IA que resuma el contexto sin responder preguntas.
  * @param {Object} aiProvider - Proveedor IA

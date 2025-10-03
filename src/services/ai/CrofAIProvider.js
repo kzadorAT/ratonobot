@@ -96,4 +96,16 @@ export default class CrofAIProvider extends AIProvider {
   async selectModel(modelId) {
     this.modelName = modelId;
   }
+
+  async getMaxContextLength(modelId) {
+    const models = await this.listModels();
+    const model = models.find(m => m.id === modelId);
+    if (!model) {
+      logger.warn(`Modelo ${modelId} no encontrado en CrofAI`);
+      return 'Unknown';
+    }
+    const maxContext = model.details.contextLength;
+    logger.info(`Max context length para modelo ${modelId} en CrofAI: ${maxContext}`);
+    return maxContext;
+  }
 }

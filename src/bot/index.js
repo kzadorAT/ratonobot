@@ -18,7 +18,7 @@ export default async function startBot(provider) {
 
   client.login(process.env.DISCORD_TOKEN);
 
-  client.once('ready', () => {
+  client.once('clientReady', () => {
     const status = `${aiProvider.providerName}/${aiProvider.modelName}`;
     client.user.setActivity(status, { type: ActivityType.Custom });
     logger.info(`Bot de Discord iniciado con IA: ${status}`);

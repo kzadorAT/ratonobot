@@ -5,18 +5,37 @@ import { ActivityType } from 'discord.js';
 import 'dotenv/config';
 import logger from '../services/logger.js';
 
-let aiProvider = null;
+// Exportar el cliente de Discord para que main.js pueda acceder a él
+export { client };
 
-export default async function startBot(provider) {
+let aiProvider = null;
+let selectedGuildId = null;
+let selectedChannelId = null;
+
+export function getSelectedGuildId() {
+  return selectedGuildId;
+}
+
+export function getSelectedChannelId() {
+  return selectedChannelId;
+}
+
+export async function setSelectedGuildAndChannel(guildId, channelId) {
+  selectedGuildId = guildId;
+  selectedChannelId = channelId;
+  logger.info(`Servidor y canal seleccionados: Guild ID ${selectedGuildId}, Channel ID ${selectedChannelId}`);
+}
+
+export async function startBot(provider) {
   aiProvider = provider;
 
   setupEventHandlers(client);
 
   client.on('messageCreate', (message) =>
-    handleMessage(message, aiProvider)
+    handleMessage(message, aiProvider, selectedGuildId, selectedChannelId)
   );
 
-  client.login(process.env.DISCORD_TOKEN);
+  await client.login(process.env.DISCORD_TOKEN);
 
   client.once('clientReady', () => {
     const status = `${aiProvider.providerName}/${aiProvider.modelName}`;

@@ -11,9 +11,25 @@ const targetChannelName = 'testing-bot';
 
 let isHandlingMessage = false;
 
-async function handleMessage(message, aiProvider) {
+async function handleMessage(message, aiProvider, selectedGuildId = null, selectedChannelId = null) {
   if (message.author.bot || isHandlingMessage) return;
-  if (message.channel.name !== targetChannelName) return;
+
+  // Lógica de canal seleccionado (si se ha configurado)
+  if (selectedChannelId && message.channel.id !== selectedChannelId) {
+    logger.debug(`Mensaje ignorado (canal no seleccionado): ${message.channel.name} (${message.channel.id})`);
+    return;
+  }
+
+  // Lógica de servidor seleccionado (si se ha configurado)
+  if (selectedGuildId && message.guild.id !== selectedGuildId) {
+    logger.debug(`Mensaje ignorado (servidor no seleccionado): ${message.guild.name} (${message.guild.id})`);
+    return;
+  }
+
+  // Mantenemos la lógica original de canal de testing como fallback si no se selecciona un canal específico
+  if (!selectedChannelId && message.channel.name !== targetChannelName) {
+    return;
+  }
 
   try {
     isHandlingMessage = true;
